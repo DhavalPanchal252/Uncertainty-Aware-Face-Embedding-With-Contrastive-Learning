@@ -1,0 +1,1802 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UCFace — Interactive Study Guide</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Fira+Code:wght@400;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter','sans-serif'], mono: ['Fira Code','monospace'], display: ['Syne','sans-serif'] },
+      colors: {
+        primary: '#0f172a', secondary: '#334155', accent: '#2563eb',
+        highlight: '#dbeafe', bg_light: '#f8fafc',
+        navy: '#0f172a', slate: '#64748b'
+      }
+    }
+  }
+}
+</script>
+<style>
+  body { background-color: #f1f5f9; color: #0f172a; }
+
+  /* ensure MathJax formulas are visible */
+  .MathJax, .mjx-chtml { color: #000 !important; }
+
+  /* ── SIDEBAR NAV ── */
+  .nav-link { transition: all 0.2s; border-left: 3px solid transparent; }
+  .nav-link.active { border-left-color: #2563eb; color: #2563eb; font-weight: 700; background-color: #eff6ff; }
+  .nav-link:hover:not(.active) { background: #f8fafc; border-left-color: #93c5fd; color: #1d4ed8; }
+
+  /* ── PROSE ── */
+  .prose p { margin-bottom: 1.25rem; line-height: 1.85; color: #334155; font-size: 0.97rem; }
+  .prose h3 { font-size: 1.35rem; font-weight: 700; margin-top: 2.2rem; margin-bottom: 0.9rem; color: #0f172a; }
+  .prose ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 1.5rem; color: #334155; }
+  .prose li { margin-bottom: 0.5rem; line-height: 1.75; }
+  .prose strong { color: #1e293b; font-weight: 700; }
+
+  /* ── MATH TERMS ── */
+  .math-term {
+    display: inline-block; padding: 0.1rem 0.45rem; margin: 0 0.1rem;
+    border-radius: 0.3rem; background: #e2e8f0;
+    font-family: 'Fira Code', monospace; cursor: pointer;
+    transition: all 0.2s; font-weight: 600; font-size: 0.88rem;
+  }
+  .math-term:hover, .math-term.active {
+    background: #2563eb; color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px -1px rgba(37,99,235,0.35);
+  }
+
+  /* ── TOOLTIP ── */
+  .tooltip-box {
+    position: absolute; z-index: 50; background: #1e293b; color: white;
+    padding: 0.6rem 1rem; border-radius: 0.5rem; font-size: 0.8rem;
+    max-width: 260px; line-height: 1.5; pointer-events: none;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3); transition: opacity 0.15s;
+  }
+  .tooltip-box::before {
+    content: ''; position: absolute; top: -6px; left: 16px;
+    border: 6px solid transparent; border-bottom-color: #1e293b;
+    border-top: none;
+  }
+
+  /* ── BLURRY BOX ── */
+  .blurry-face { filter: blur(7px); transition: filter 0.55s cubic-bezier(0.4,0,0.2,1); }
+  .blurry-face:hover { filter: blur(0px); }
+
+  /* ── CHART CONTAINERS ── */
+  .chart-wrap { position: relative; width: 100%; height: 300px; }
+  .chart-wrap-sm { position: relative; width: 100%; height: 220px; }
+  .chart-wrap-lg { position: relative; width: 100%; height: 380px; }
+
+  /* ── CANVAS ANIMATION ── */
+  #hypersphere-canvas { cursor: grab; }
+  #hypersphere-canvas:active { cursor: grabbing; }
+
+  /* ── PIPELINE NODES ── */
+  .pipe-node {
+    display: flex; flex-direction: column; align-items: center;
+    position: relative; min-width: 100px; cursor: pointer;
+  }
+  .pipe-node .node-box {
+    width: 80px; height: 80px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem; transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .pipe-node:hover .node-box { transform: scale(1.15); box-shadow: 0 8px 24px rgba(37,99,235,0.35); }
+  .pipe-node .node-label { font-size: 0.72rem; font-weight: 700; text-align: center; margin-top: 0.6rem; color: #334155; }
+  .pipe-node .node-sub { font-size: 0.65rem; text-align: center; color: #64748b; line-height: 1.3; }
+  .pipe-arrow-h { flex: 1; height: 2px; background: linear-gradient(90deg, #94a3b8, #2563eb); position: relative; min-width: 20px; }
+  .pipe-arrow-h::after { content: '▶'; position: absolute; right: -6px; top: -8px; color: #2563eb; font-size: 0.9rem; }
+
+  /* ── FLIP CARD ── */
+  .flip-card { perspective: 800px; cursor: pointer; }
+  .flip-inner { position: relative; width: 100%; height: 180px; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(0.4,0,0.2,1); }
+  .flip-card:hover .flip-inner, .flip-card.flipped .flip-inner { transform: rotateY(180deg); }
+  .flip-front, .flip-back { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 0.75rem; padding: 1.25rem; display: flex; flex-direction: column; justify-content: center; }
+  .flip-back { transform: rotateY(180deg); }
+
+  /* ── PROGRESS ANIMATION ── */
+  @keyframes fillBar { from { width: 0; } to { width: var(--target); } }
+  .fill-bar { animation: fillBar 1.2s cubic-bezier(0.4,0,0.2,1) forwards; }
+
+  /* ── PULSE RING ── */
+  @keyframes pulseRing { 0%,100%{transform:scale(1);opacity:0.6} 50%{transform:scale(1.5);opacity:0} }
+  .pulse-ring { animation: pulseRing 2s infinite; }
+
+  /* ── SLIDER RANGE ── */
+  input[type=range] { -webkit-appearance: none; height: 6px; border-radius: 6px; background: #e2e8f0; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #2563eb; cursor: pointer; box-shadow: 0 2px 8px rgba(37,99,235,0.4); transition: box-shadow 0.2s; }
+  input[type=range]::-webkit-slider-thumb:hover { box-shadow: 0 2px 16px rgba(37,99,235,0.6); }
+
+  /* ── SECTION BADGES ── */
+  .sec-badge { display: inline-block; padding: 0.2rem 0.75rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* ── GLOW CARD ── */
+  .glow-card { transition: box-shadow 0.3s, transform 0.3s; }
+  .glow-card:hover { box-shadow: 0 0 0 2px #2563eb, 0 8px 24px rgba(37,99,235,0.15); transform: translateY(-2px); }
+
+  /* ── TABS ── */
+  .tab-btn { padding: 0.5rem 1.1rem; border-radius: 0.5rem; font-size: 0.82rem; font-weight: 600; transition: all 0.2s; cursor: pointer; border: 1.5px solid transparent; }
+  .tab-btn.active { background: #2563eb; color: white; border-color: #2563eb; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
+  .tab-btn:not(.active) { background: white; color: #334155; border-color: #e2e8f0; }
+  .tab-btn:not(.active):hover { border-color: #93c5fd; color: #2563eb; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── STEP CONNECTOR ── */
+  .step-line { position: absolute; left: 19px; top: 40px; bottom: 0; width: 2px; background: linear-gradient(180deg, #2563eb 0%, #e2e8f0 100%); }
+
+  /* ── SCROLLBAR ── */
+  #main-content::-webkit-scrollbar { width: 6px; }
+  #main-content::-webkit-scrollbar-track { background: #f1f5f9; }
+  #main-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  #main-content::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+  /* ── HIGHLIGHT PULSE ── */
+  @keyframes highlightIn { 0%{background:#dbeafe} 100%{background:transparent} }
+  .highlight-pulse { animation: highlightIn 1.5s ease-out forwards; border-radius: 0.5rem; }
+
+  /* ── VMF CANVAS ── */
+  #vmf-canvas { border-radius: 50%; }
+
+  /* ── ACCORDION ── */
+  .accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.4s ease, padding 0.3s; }
+  .accordion-body.open { max-height: 600px; padding-top: 1rem; }
+  .accordion-icon { transition: transform 0.3s; }
+  .accordion-btn.open .accordion-icon { transform: rotate(180deg); }
+</style>
+</head>
+<body class="flex flex-col md:flex-row h-screen overflow-hidden font-sans antialiased">
+
+<!-- ══════ SIDEBAR ══════ -->
+<aside class="w-full md:w-72 bg-white border-r border-slate-200 h-auto md:h-full overflow-y-auto flex-shrink-0 z-20 shadow-lg" id="sidebar">
+  <div class="p-5 border-b border-slate-100 bg-gradient-to-br from-blue-600 to-blue-800">
+    <div class="flex items-center gap-2 mb-1">
+      <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center text-white text-sm font-bold">UC</div>
+      <h1 class="text-lg font-extrabold text-white" style="font-family:Syne,sans-serif;">UCFace</h1>
+    </div>
+    <p class="text-xs text-blue-100 leading-tight">Uncertainty-Aware Face Embedding<br>With Contrastive Learning</p>
+    <div class="mt-3 flex gap-2 flex-wrap">
+      <span class="text-xs bg-white/20 text-white rounded px-2 py-0.5">IEEE TIFS 2024</span>
+      <span class="text-xs bg-white/20 text-white rounded px-2 py-0.5">KAIST/IBS</span>
+    </div>
+  </div>
+  <!-- Progress bar -->
+  <div class="px-4 py-2 border-b border-slate-100">
+    <div class="flex justify-between text-xs text-slate-500 mb-1">
+      <span>Reading Progress</span><span id="progress-pct">0%</span>
+    </div>
+    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div id="read-bar" class="h-full bg-blue-500 rounded-full transition-all duration-200" style="width:0%"></div>
+    </div>
+  </div>
+  <nav class="flex flex-col p-3 space-y-0.5 text-sm" id="main-nav">
+    <a href="#intro"        class="nav-link py-2 px-3 rounded-r-lg text-sm">0. Introduction</a>
+    <a href="#foundations"  class="nav-link py-2 px-3 rounded-r-lg text-sm">1. Deep Learning Foundations</a>
+    <a href="#hypersphere"  class="nav-link py-2 px-3 rounded-r-lg text-sm">2. Unit Hypersphere</a>
+    <a href="#openset"      class="nav-link py-2 px-3 rounded-r-lg text-sm">3. Open-Set Discrepancy</a>
+    <a href="#scl"          class="nav-link py-2 px-3 rounded-r-lg text-sm">4. Contrastive Learning</a>
+    <a href="#uncertainty"  class="nav-link py-2 px-3 rounded-r-lg text-sm">5. Feature Norm & Uncertainty</a>
+    <a href="#vmf"          class="nav-link py-2 px-3 rounded-r-lg text-sm">6. vMF Distribution</a>
+    <a href="#architecture" class="nav-link py-2 px-3 rounded-r-lg text-sm">7. UCFace Architecture</a>
+    <a href="#math"         class="nav-link py-2 px-3 rounded-r-lg text-sm">8. Math Formulation</a>
+    <a href="#training"     class="nav-link py-2 px-3 rounded-r-lg text-sm">9. Training Strategy</a>
+    <a href="#metrics"      class="nav-link py-2 px-3 rounded-r-lg text-sm">10. Evaluation Metrics</a>
+    <a href="#results"      class="nav-link py-2 px-3 rounded-r-lg text-sm">11. Results</a>
+    <a href="#conclusion"   class="nav-link py-2 px-3 rounded-r-lg text-sm">12. Advantages & Limitations</a>
+  </nav>
+  <!-- Quick stats -->
+  <div class="p-4 border-t border-slate-100 grid grid-cols-2 gap-2">
+    <div class="bg-blue-50 rounded-lg p-2 text-center">
+      <div class="text-lg font-extrabold text-blue-600">+45%</div>
+      <div class="text-xs text-slate-500 leading-tight">SCFace d₁<br>boost</div>
+    </div>
+    <div class="bg-emerald-50 rounded-lg p-2 text-center">
+      <div class="text-lg font-extrabold text-emerald-600">×13.6</div>
+      <div class="text-xs text-slate-500 leading-tight">SurvFace<br>TPIR gain</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ══════ MAIN CONTENT ══════ -->
+<main class="flex-1 h-full overflow-y-auto bg-bg_light relative" id="main-content">
+
+<!-- Floating tooltip -->
+<div id="tooltip" class="tooltip-box opacity-0 fixed" style="pointer-events:none;"></div>
+
+<div class="max-w-4xl mx-auto p-6 md:p-12 pb-32 prose">
+
+<!-- ════════════════════════════════ SECTION 0 ════════════ -->
+<section id="intro" class="mb-24 pt-4 scroll-mt-12">
+  <div class="sec-badge bg-blue-100 text-blue-700 mb-4">Section 00 — Overview</div>
+  <h1 class="text-4xl md:text-5xl font-extrabold mb-4 leading-tight" style="font-family:Syne,sans-serif;">Uncertainty-Aware<br><span class="text-blue-600">Face Embedding</span><br><span class="text-slate-400 text-3xl font-bold">With Contrastive Learning</span></h1>
+
+  <p>Facial recognition represents one of the most complex and heavily researched domains within artificial intelligence. While traditional object recognition requires a computer to distinguish between visually distinct categories, such as a car and a dog, facial recognition requires the machine to distinguish between millions of virtually identical structures. Every human face possesses the same basic geometric arrangement: two eyes, a nose, and a mouth. The challenge lies in teaching a machine to recognize microscopic, identity-specific variations while simultaneously ignoring massive environmental variations such as lighting changes, facial expressions, aging, and image blur.</p>
+  <p>Modern facial recognition systems have achieved remarkable breakthroughs, often surpassing human capabilities in controlled environments. However, their performance degrades precipitously when deployed in the real world. Surveillance cameras, mobile phones, and biometric security checkpoints frequently capture images that are blurry, poorly lit, or captured from extreme angles. When a facial recognition model encounters these highly uncertain, low-quality images, it often makes catastrophic misclassifications.</p>
+  <p>The research paper <em>Uncertainty-Aware Face Embedding With Contrastive Learning for Open-Set Evaluation</em> (hereafter referred to as UCFace) introduces a novel mathematical framework to solve this vulnerability. The authors propose a method that teaches the neural network to explicitly quantify its own uncertainty. Instead of forcing the network to memorize blurry noise, the UCFace architecture utilizes directional statistics and a probabilistic framework known as the von Mises-Fisher distribution to dynamically adjust how much the model learns from any given image. To fully comprehend the mechanics, architecture, and mathematical elegance of the UCFace model, one must first build a rigorous foundational understanding of the deep learning concepts that underpin it.</p>
+
+  <!-- Visual: 3-column problem → solution cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-8 not-prose">
+    <div class="bg-red-50 border border-red-200 rounded-xl p-5 glow-card">
+      <div class="text-3xl mb-3">🌫️</div>
+      <h4 class="font-bold text-red-700 text-base mb-2">The Problem</h4>
+      <p class="text-sm text-red-800 leading-relaxed">Real-world surveillance images are blurry, poorly lit, or extreme-angle — causing catastrophic misclassification in standard models.</p>
+    </div>
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 glow-card">
+      <div class="text-3xl mb-3">🔬</div>
+      <h4 class="font-bold text-amber-700 text-base mb-2">The Insight</h4>
+      <p class="text-sm text-amber-800 leading-relaxed">The <strong>feature norm</strong> (magnitude of the output vector before L₂ normalization) intrinsically correlates with image quality — no extra network needed.</p>
+    </div>
+    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-5 glow-card">
+      <div class="text-3xl mb-3">✅</div>
+      <h4 class="font-bold text-emerald-700 text-base mb-2">The Solution</h4>
+      <p class="text-sm text-emerald-800 leading-relaxed">Represent each anchor as a <strong>vMF probability distribution</strong> — learn aggressively from clear images, apply mathematical forgiveness to degraded ones.</p>
+    </div>
+  </div>
+
+  <!-- Paper metadata card -->
+  <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm my-6 not-prose flex flex-wrap gap-6">
+    <div><div class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Published In</div><div class="font-bold text-slate-700 text-sm">IEEE Trans. Information Forensics &amp; Security, Vol. 19, 2024</div></div>
+    <div><div class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Method Name</div><div class="font-bold text-blue-600 text-sm">UCFace</div></div>
+    <div><div class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Backbone</div><div class="font-bold text-slate-700 text-sm">MobileFaceNet / ResNet-50</div></div>
+    <div><div class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Core Math</div><div class="font-bold text-slate-700 text-sm">von Mises-Fisher Distribution</div></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 1 ════════════ -->
+<section id="foundations" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-indigo-100 text-indigo-700 mb-3">Section 01</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">Foundational Concepts in Deep Learning</h2>
+
+  <h3>The Mechanics of Representation Learning</h3>
+  <p>Deep learning is a subset of machine learning based on artificial neural networks, which are algorithms inspired by the structure of the human brain. To a computer, an image is nothing more than a massive grid of pixel intensity values. A Convolutional Neural Network (CNN) acts as a sophisticated mathematical filter that processes this grid. As the image passes through the successive layers of the CNN, the network extracts increasingly complex patterns. The earliest layers detect simple edges and color gradients. Deeper layers combine these edges to recognize textures and shapes. The final layers assemble these shapes into high-level semantic concepts, such as the curve of a jawline or the distance between the pupils.</p>
+  <p>This entire feature extraction engine is colloquially referred to as the "backbone" of the model. When an image of a face completes its journey through the backbone, the network discards the original pixel grid and outputs a dense array of numbers. This array is called an "embedding" or a "representation vector". The embedding acts as a unique mathematical fingerprint for that specific face. If the neural network is well-trained, the embeddings of two different photographs of the same person will consist of very similar numbers, while the embeddings of two different people will be numerically distinct.</p>
+
+  <!-- VISUAL: Interactive CNN Pipeline (clickable nodes) -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 my-8 not-prose" id="pipeline-section">
+    <h4 class="font-bold text-slate-700 text-base mb-1 flex items-center gap-2">🔁 CNN Feature Extraction Pipeline <span class="text-xs font-normal text-slate-400 ml-2">Click any stage for details</span></h4>
+    <p class="text-xs text-slate-500 mb-5">How a face image becomes a 512-dimensional mathematical fingerprint</p>
+    <div class="flex items-center overflow-x-auto pb-2 gap-0">
+      <div class="pipe-node" data-info="Raw pixels: each pixel is just a number (0-255) representing brightness. A 200×200 face image = 40,000 numbers." onclick="showPipeInfo(this)">
+        <div class="node-box bg-slate-100 border-2 border-slate-300">🖼️</div>
+        <span class="node-label">Raw Image</span>
+        <span class="node-sub">H×W×3<br>pixel grid</span>
+      </div>
+      <div class="pipe-arrow-h mx-1"></div>
+      <div class="pipe-node" data-info="Early convolutional layers detect simple edges, corners, and color gradients — like a Sobel filter but learned automatically." onclick="showPipeInfo(this)">
+        <div class="node-box bg-blue-50 border-2 border-blue-200">📐</div>
+        <span class="node-label">Early Layers</span>
+        <span class="node-sub">Edges &amp;<br>gradients</span>
+      </div>
+      <div class="pipe-arrow-h mx-1"></div>
+      <div class="pipe-node" data-info="Mid layers combine edges into textures, patterns, and shapes — like detecting the bridge of a nose or the curve of an eyebrow." onclick="showPipeInfo(this)">
+        <div class="node-box bg-violet-50 border-2 border-violet-200">🔷</div>
+        <span class="node-label">Mid Layers</span>
+        <span class="node-sub">Textures &amp;<br>shapes</span>
+      </div>
+      <div class="pipe-arrow-h mx-1"></div>
+      <div class="pipe-node" data-info="Deep layers assemble shapes into semantic identity concepts — like 'the distance between the pupils is 18% of face width', or 'jawline is angular'." onclick="showPipeInfo(this)">
+        <div class="node-box bg-rose-50 border-2 border-rose-200">👁️</div>
+        <span class="node-label">Deep Layers</span>
+        <span class="node-sub">Jawline,<br>eye spacing</span>
+      </div>
+      <div class="pipe-arrow-h mx-1"></div>
+      <div class="pipe-node" data-info="Projection head: a temporary FC layer that scatters embeddings uniformly across the hypersphere. Discarded after training — only the backbone is deployed." onclick="showPipeInfo(this)">
+        <div class="node-box bg-amber-50 border-2 border-amber-200">🔄</div>
+        <span class="node-label">Proj. Head</span>
+        <span class="node-sub">g(·): 1024<br>→ 128-d</span>
+      </div>
+      <div class="pipe-arrow-h mx-1"></div>
+      <div class="pipe-node" data-info="Final embedding: a 512 or 1024-dimensional vector. Think of it as GPS coordinates in a 512-dimensional space — every face has a unique address." onclick="showPipeInfo(this)">
+        <div class="node-box bg-emerald-100 border-2 border-emerald-400 ring-2 ring-emerald-300">🔢</div>
+        <span class="node-label">Embedding z</span>
+        <span class="node-sub" style="color:#059669;">512-d<br>fingerprint</span>
+      </div>
+    </div>
+    <div id="pipe-info" class="mt-5 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 hidden">
+      <span class="font-bold">ℹ️ </span><span id="pipe-info-text"></span>
+    </div>
+  </div>
+
+  <!-- VISUAL: Flip cards for key concepts -->
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-4 my-8 not-prose">
+    <div class="flip-card" title="Click to flip">
+      <div class="flip-inner">
+        <div class="flip-front bg-blue-600 text-white">
+          <div class="text-2xl mb-2">🧠</div>
+          <div class="font-bold text-sm">CNN Backbone</div>
+          <div class="text-xs text-blue-200 mt-1">Hover to see more →</div>
+        </div>
+        <div class="flip-back bg-blue-800 text-white">
+          <div class="text-xs leading-relaxed">A deep neural network (e.g. ResNet-50, MobileFaceNet) that transforms a raw face image into a compact feature vector. Acts as the "feature extraction engine".</div>
+        </div>
+      </div>
+    </div>
+    <div class="flip-card" title="Click to flip">
+      <div class="flip-inner">
+        <div class="flip-front bg-violet-600 text-white">
+          <div class="text-2xl mb-2">📌</div>
+          <div class="font-bold text-sm">Embedding Vector</div>
+          <div class="text-xs text-violet-200 mt-1">Hover to see more →</div>
+        </div>
+        <div class="flip-back bg-violet-800 text-white">
+          <div class="text-xs leading-relaxed">A 512–1024 dimensional array of floats — a unique mathematical fingerprint for each identity. Similar people have embeddings pointing in similar directions.</div>
+        </div>
+      </div>
+    </div>
+    <div class="flip-card" title="Click to flip">
+      <div class="flip-inner">
+        <div class="flip-front bg-rose-600 text-white">
+          <div class="text-2xl mb-2">🔮</div>
+          <div class="font-bold text-sm">Projection Head</div>
+          <div class="text-xs text-rose-200 mt-1">Hover to see more →</div>
+        </div>
+        <div class="flip-back bg-rose-800 text-white">
+          <div class="text-xs leading-relaxed">A small FC layer used only during contrastive training. It prevents feature collapse by uniformly scattering embeddings across the hypersphere. Discarded at inference.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 2 ════════════ -->
+<section id="hypersphere" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-sky-100 text-sky-700 mb-3">Section 02</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">The Unit Hypersphere &amp; Cosine Similarity</h2>
+
+  <h3>The Geometric Space of the Unit Hypersphere</h3>
+  <p>To compare these mathematical fingerprints, the system plots the embeddings as coordinates in a geometric space. However, this is not a standard three-dimensional space. To capture the immense complexity of a human face, the embeddings typically contain 512 or 1024 distinct dimensions.</p>
+  <p>Operating in a space with a thousand dimensions introduces a mathematical paradox known as the "curse of dimensionality". In extremely high-dimensional spaces, the volume of the space expands so rapidly that all points begin to spread out equally. If one measures the straight-line distance (Euclidean distance) between any two random points in a thousand-dimensional space, the distances will all appear roughly identical, making it impossible for the model to distinguish between similar and dissimilar faces.</p>
+  <p>To neutralize the curse of dimensionality, researchers apply a mathematical constraint called <span class="math-term" data-def="L₂ normalization forces every embedding vector to have a magnitude of exactly 1. Formula: v̂ = v / ‖v‖. This projects all points onto the surface of a unit hypersphere.">L₂ normalization</span>. This operation forces every embedding vector, regardless of its original magnitude, to have a length of exactly one. To visualize this, one can imagine a standard three-dimensional space containing a hollow globe with a radius of one. L₂ normalization takes every data point floating inside or outside the globe and projects it directly onto the surface of the globe. Because these embeddings exist in spaces far beyond three dimensions, this theoretical geometric surface is called a "unit hypersphere".</p>
+  <p>By constraining all embeddings to the surface of the hypersphere, the system eliminates the magnitude (length) of the vectors entirely. The network is forced to differentiate faces solely based on the angle between them. The similarity between two faces is thus calculated using <span class="math-term" data-def="Cosine Similarity = cos(θ) = (a·b) / (‖a‖‖b‖). On the unit hypersphere (‖a‖=‖b‖=1), this simplifies to just the dot product: cos(θ) = a·b. Ranges from -1 (opposite) to 1 (identical direction).">Cosine Similarity</span>, a metric that measures the cosine of the angle between two vectors.</p>
+  <p>If two images feature the exact same identity, their vectors should point in the exact same direction, resulting in an angle of zero degrees and a maximal cosine similarity of one. If two images feature completely different identities, their vectors should point in orthogonal (perpendicular) directions, yielding an angle of ninety degrees and a cosine similarity of zero. Cosine similarity is profoundly effective in high-dimensional machine learning because it evaluates the fundamental directional pattern of the data while remaining entirely immune to variations in scale.</p>
+
+  <!-- VISUAL: Interactive 3D Hypersphere Visualizer -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 my-8 not-prose">
+    <h4 class="font-bold text-slate-700 text-base mb-1">🌐 Interactive Hypersphere Visualizer</h4>
+    <p class="text-xs text-slate-500 mb-4">Drag to rotate · Each colored cluster = one identity · Points on the surface = L₂ normalized embeddings</p>
+    <div class="flex flex-col md:flex-row gap-6 items-center">
+      <canvas id="hypersphere-canvas" width="280" height="280" class="border border-slate-100 rounded-xl shadow bg-slate-950"></canvas>
+      <div class="flex-1 space-y-4">
+        <div>
+          <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1"><span>Number of Identities</span><span id="id-count-val">5</span></div>
+          <input type="range" id="id-count" min="2" max="12" value="5" class="w-full">
+        </div>
+        <div>
+          <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1"><span>Cluster Spread (Intra-class Distance)</span><span id="spread-val">0.3</span></div>
+          <input type="range" id="spread" min="0.05" max="1.0" step="0.05" value="0.3" class="w-full">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-blue-50 rounded-lg p-3 text-center">
+            <div class="text-xl font-extrabold text-blue-600" id="intra-disp">LOW</div>
+            <div class="text-xs text-slate-500">Intra-class Distance<br><span class="text-emerald-600 font-semibold">Desired: LOW ✓</span></div>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3 text-center">
+            <div class="text-xl font-extrabold text-slate-600" id="inter-disp">HIGH</div>
+            <div class="text-xs text-slate-500">Inter-class Distance<br><span class="text-emerald-600 font-semibold">Desired: HIGH ✓</span></div>
+          </div>
+        </div>
+        <div class="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 leading-relaxed">
+          Drag the sphere to see all 360°. Increase spread to simulate what standard SCL overfitting looks like on blurry images.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISUAL: Cosine similarity interactive angle demo -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 my-6 not-prose">
+    <h4 class="font-bold text-slate-700 text-base mb-1">📐 Cosine Similarity — Interactive Demo</h4>
+    <p class="text-xs text-slate-500 mb-4">Drag the slider to change the angle between two face embeddings</p>
+    <div class="flex flex-col md:flex-row gap-6 items-center">
+      <canvas id="cosine-demo" width="240" height="240" class="rounded-xl bg-slate-50 border border-slate-200"></canvas>
+      <div class="flex-1">
+        <div class="flex justify-between text-sm font-semibold text-slate-600 mb-2">
+          <span>Angle θ between embeddings</span>
+          <span id="angle-label" class="text-blue-600 font-bold">0°</span>
+        </div>
+        <input type="range" id="angle-slider" min="0" max="180" value="0" class="w-full mb-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-xl p-4 text-center" id="cos-card" style="background:#eff6ff;border:1.5px solid #bfdbfe;">
+            <div class="text-3xl font-extrabold" id="cos-val" style="color:#2563eb;">1.00</div>
+            <div class="text-xs text-slate-500 mt-1">Cosine Similarity</div>
+          </div>
+          <div class="rounded-xl p-4 text-center bg-slate-50 border border-slate-200">
+            <div class="text-xl font-bold text-slate-600" id="identity-label">Same Person ✓</div>
+            <div class="text-xs text-slate-500 mt-1">Interpretation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 3 ════════════ -->
+<section id="openset" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-amber-100 text-amber-700 mb-3">Section 03</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">The Open-Set Domain Discrepancy</h2>
+
+  <h3>The Open-Set Domain Discrepancy</h3>
+  <p>The ultimate goal of plotting these vectors on a hypersphere is to prepare the model for real-world deployment. The nature of this deployment dictates the training paradigm, leading to the critical distinction between closed-set and open-set recognition scenarios.</p>
+  <p>A closed-set scenario implies that the system possesses perfect, exhaustive knowledge of every identity it will ever encounter. This is analogous to a schoolteacher taking attendance in a highly controlled classroom. The teacher has a fixed roster of students. When a student enters the room, the teacher's only task is to match the student's face to one of the predetermined names on the roster. In a closed-set system, the identities present in the training data are identical to the identities present in the testing data.</p>
+  <p>An open-set scenario represents the chaotic reality of the outside world. This is analogous to an airport security checkpoint comparing the faces of passing travelers against a terrorist watchlist. Millions of passengers flow through the checkpoint daily. The vast majority of these individuals are innocent strangers who are entirely unknown to the security system. The model must determine whether the face in front of the camera perfectly matches a specific threat on the watchlist, or if the face belongs to an unknown, un-enrolled entity. In open-set recognition, the training identities and the testing identities do not overlap.</p>
+  <p>Models trained purely as closed-set classifiers frequently suffer from catastrophic failures when deployed in open-set environments, a phenomenon referred to as the "open-set domain discrepancy". During training, a standard closed-set classifier learns the central, average representation of each known identity, effectively creating a specific territory on the hypersphere for every person in its training database. When the model encounters a complete stranger during testing, it lacks the capacity to declare the face "unknown." Instead, it forcibly assigns the stranger to the closest pre-existing territory, resulting in a false positive identification.</p>
+  <p>To succeed in open-set scenarios, a model must master metric learning. It must not merely memorize specific people; it must learn the universal geometric definition of what makes any two faces the same or different. To accomplish this, the model must optimize two distinct distances: intra-class distance and inter-class distance.</p>
+  <p>The intra-class distance is the geometric distance between different images of the exact same person. The inter-class distance is the geometric distance between images of entirely different people. To conceptualize this, one can utilize a grocery store analogy. The task of the grocer is to organize the produce section. All Granny Smith apples must be packed tightly together into a single, compact bin; this represents a small intra-class distance. Simultaneously, the grocer must ensure that the apple bin is positioned as far away as possible from the orange bin to prevent a customer from accidentally picking up the wrong fruit; this represents a large inter-class distance. An optimal open-set face recognition model must relentlessly minimize intra-class distance while maximizing inter-class distance across the entire hypersphere.</p>
+
+  <!-- VISUAL: Closed vs Open Set comparison -->
+  <div class="grid md:grid-cols-2 gap-5 my-8 not-prose">
+    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-5 relative overflow-hidden glow-card">
+      <div class="absolute top-3 right-3 text-xs bg-emerald-200 text-emerald-800 font-bold px-2 py-0.5 rounded-full">CLOSED SET</div>
+      <span class="text-3xl block mb-3">🏫</span>
+      <h4 class="font-bold text-emerald-800 text-base mb-2">School Attendance</h4>
+      <p class="text-sm text-emerald-900 leading-relaxed">Fixed roster of students. Teacher only needs to match faces to known names. Training identities = Testing identities.</p>
+      <div class="mt-3 flex flex-wrap gap-1">
+        <span class="text-xs bg-emerald-200 text-emerald-800 rounded px-2 py-0.5">✓ Simple</span>
+        <span class="text-xs bg-emerald-200 text-emerald-800 rounded px-2 py-0.5">✓ Controlled</span>
+        <span class="text-xs bg-red-100 text-red-700 rounded px-2 py-0.5">✗ Not Real-World</span>
+      </div>
+    </div>
+    <div class="bg-orange-50 border border-orange-200 rounded-xl p-5 relative overflow-hidden glow-card">
+      <div class="absolute top-3 right-3 text-xs bg-orange-200 text-orange-800 font-bold px-2 py-0.5 rounded-full">OPEN SET</div>
+      <span class="text-3xl block mb-3">✈️</span>
+      <h4 class="font-bold text-orange-800 text-base mb-2">Airport Security</h4>
+      <p class="text-sm text-orange-900 leading-relaxed">Millions of strangers scanned against a watchlist. Most travelers are completely unknown. Model must say "unknown" — not force-match strangers.</p>
+      <div class="mt-3 flex flex-wrap gap-1">
+        <span class="text-xs bg-orange-200 text-orange-800 rounded px-2 py-0.5">✓ Real-World</span>
+        <span class="text-xs bg-red-100 text-red-700 rounded px-2 py-0.5">✗ Unknown identities</span>
+        <span class="text-xs bg-red-100 text-red-700 rounded px-2 py-0.5">✗ Hard for classifiers</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISUAL: Intra vs Inter class animated bars -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm my-6 not-prose" id="intra-inter-demo">
+    <h4 class="font-bold text-slate-700 text-base mb-4">🍎 The Grocery Store Analogy — Metric Learning Goal</h4>
+    <div class="space-y-4">
+      <div>
+        <div class="flex justify-between text-sm font-semibold mb-1">
+          <span>🍎 Intra-class Distance (same identity)</span>
+          <span class="text-emerald-600">Goal: MINIMIZE ↓</span>
+        </div>
+        <div class="h-6 bg-slate-100 rounded-full overflow-hidden"><div class="h-full rounded-full bg-emerald-400 transition-all duration-700" id="intra-bar" style="width:70%"></div></div>
+        <div class="text-xs text-slate-400 mt-1">Apple → Apple: should be VERY close together on hypersphere</div>
+      </div>
+      <div>
+        <div class="flex justify-between text-sm font-semibold mb-1">
+          <span>🍊 Inter-class Distance (different identity)</span>
+          <span class="text-blue-600">Goal: MAXIMIZE ↑</span>
+        </div>
+        <div class="h-6 bg-slate-100 rounded-full overflow-hidden"><div class="h-full rounded-full bg-blue-400 transition-all duration-700" id="inter-bar" style="width:40%"></div></div>
+        <div class="text-xs text-slate-400 mt-1">Apple → Orange: should be VERY far apart on hypersphere</div>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="simulateTraining()" class="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition">▶ Simulate Training Progress</button>
+      <button onclick="resetTraining()" class="text-sm bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-semibold hover:bg-slate-300 transition">↺ Reset</button>
+    </div>
+    <p class="text-xs text-slate-500 mt-3" id="training-status">Click to watch how UCFace optimizes both distances simultaneously.</p>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 4 ════════════ -->
+<section id="scl" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-violet-100 text-violet-700 mb-3">Section 04</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">Supervised Contrastive Learning</h2>
+
+  <h3>The Mechanics of Supervised Contrastive Learning (SCL)</h3>
+  <p>To manipulate these geometric distances, modern deep learning utilizes a paradigm known as Supervised Contrastive Learning (SCL). Contrastive learning abandons the traditional approach of teaching a model to output a specific class label. Instead, it teaches the model through relentless, direct comparison.</p>
+  <p>The fundamental mechanism of SCL can be perfectly understood through the analogy of a multi-directional tug-of-war. During training, the model selects a target image, which is designated as the "anchor". The model then gathers a "positive sample," which is a different image of the exact same person, and a multitude of "negative samples," which are images of completely different people.</p>
+  <p>The loss function acts as the referee in this tug-of-war. A loss function is a mathematical equation that calculates the error in the model's predictions; the model's entire purpose is to alter its internal weights to minimize this loss. In SCL, the loss function generates a powerful magnetic "pull" force that draws the anchor and the positive sample closer together in the hyperspherical embedding space. Simultaneously, the loss function generates a repelling "push" force that violently shoves the negative samples away from the anchor. By repeating this tug-of-war billions of times across thousands of identities, the model naturally learns to cluster identical faces tightly together while carving out massive geometric boundaries between different individuals.</p>
+
+  <!-- VISUAL: Animated Tug-of-War -->
+  <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-6 my-8 not-prose">
+    <h4 class="font-bold text-indigo-800 text-base mb-4">🧲 The Tug-of-War — Interactive Simulation</h4>
+    <div class="flex justify-center">
+      <canvas id="tugofwar-canvas" width="560" height="300" class="rounded-xl border border-indigo-200 bg-white w-full max-w-xl"></canvas>
+    </div>
+    <div class="flex gap-3 mt-4 justify-center flex-wrap">
+      <button id="tow-start" onclick="startTugOfWar()" class="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition">▶ Start Training</button>
+      <button id="tow-reset" onclick="resetTugOfWar()" class="text-sm bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-semibold hover:bg-slate-300 transition">↺ Reset</button>
+    </div>
+    <p class="text-xs text-indigo-700 text-center mt-2">Blue = Anchor · Green = Positive (same identity) · Red = Negatives (different identities)</p>
+  </div>
+
+  <h3>The InfoNCE Objective and the Temperature Parameter</h3>
+  <p>The mathematical engine driving this tug-of-war is the Information Noise Contrastive Estimation (InfoNCE) loss. The InfoNCE formula calculates a ratio: it measures the exponential similarity of the positive pair and divides it by the sum of the exponential similarities of all negative pairs in the batch. By maximizing this fraction, the model is mathematically forced to increase the positive similarity while decreasing the negative similarities.</p>
+  <p>A defining feature of the InfoNCE loss is the temperature parameter, denoted by the Greek letter <span class="math-term" data-def="Temperature τ controls how sharply the model penalizes hard negatives. Low τ → sharp, unforgiving distribution → discriminative learning. High τ → soft distribution → tolerant of overlapping features. UCFace uses τ = 0.8 (optimal).">τ (tau)</span>. In the realms of physics and thermodynamics, temperature describes the level of chaotic energy and randomness in a system. This concept was borrowed by the creators of Large Language Models (LLMs) to control the creativity of AI-generated text. In an LLM, a high temperature results in highly random, chaotic word choices, while a low temperature results in strict, predictable, and highly confident text generation.</p>
+  <p>In the context of contrastive learning, the temperature parameter τ serves a closely related regulatory function: it controls the sharpness of the probability distribution over the similarities, effectively dictating how severely the model penalizes "hard negatives". A hard negative is an image of a different person that happens to look incredibly similar to the anchor (e.g., a sibling or a doppelgänger).</p>
+  <p>When the temperature τ is set to a low value (e.g., 0.1), the mathematical function becomes extremely sharp and unforgiving. The model will apply massive gradient penalties to any negative sample that dares to drift even slightly close to the anchor. This forces the model to learn highly discriminative, granular features to tell similar people apart. Conversely, when the temperature τ is high, the distribution softens. The model becomes more tolerant of overlapping features and stops trying to tear the embedding space apart. Choosing the optimal temperature is critical for ensuring the model learns effectively without destabilizing the geometry of the hypersphere.</p>
+
+  <!-- VISUAL: Interactive Temperature Slider -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 my-6 shadow-sm not-prose">
+    <h4 class="font-bold text-slate-700 text-base mb-1">🌡️ Temperature Parameter τ — Interactive Effect</h4>
+    <p class="text-xs text-slate-500 mb-4">Drag the slider to see how τ changes the sharpness of the similarity distribution</p>
+    <div class="flex items-center gap-4 mb-4">
+      <span class="text-xs font-bold text-slate-500">τ=0.1<br>Sharp</span>
+      <input type="range" id="temp-slider" min="1" max="50" value="8" class="flex-1">
+      <span class="text-xs font-bold text-slate-500">τ=10<br>Soft</span>
+    </div>
+    <div class="text-center text-2xl font-extrabold text-blue-600 mb-4">τ = <span id="temp-val">0.8</span></div>
+    <div class="chart-wrap-sm"><canvas id="temp-chart"></canvas></div>
+    <div class="mt-4 p-3 rounded-lg text-sm border" id="temp-desc" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;">
+      Optimal! τ=0.8 provides perfect balance between penalizing hard negatives and geometric stability.
+    </div>
+  </div>
+
+  <h3>The Function of the Projection Head</h3>
+  <p>An architectural quirk of modern contrastive learning is the mandatory inclusion of a "projection head". The backbone of the neural network (e.g., a ResNet-50) is a massive structure containing millions of parameters. However, researchers discovered that calculating the contrastive loss directly on the output of this backbone leads to suboptimal performance.</p>
+  <p>To solve this, researchers interleave a small, temporary neural network layer—the projection head—between the backbone and the contrastive loss function. The projection head acts as a uniformity filter. Neural network backbones have a natural bias toward "feature collapse," where they lazily group all images into a narrow, cone-like region of the hypersphere rather than utilizing the entire surface area. The projection head prioritizes the objective of uniformity, violently scattering the embeddings across the entire 360-degree expanse of the hypersphere.</p>
+  <p>By projecting the data into a more forgiving, lower-dimensional space, the projection head absorbs the aggressive shocks of the contrastive push-and-pull forces. This shields the delicate, lower layers of the backbone, allowing them to learn deep, generalized semantic features without being corrupted by the rigid demands of the contrastive loss. Once the training phase is complete, the projection head is entirely amputated and discarded. The system deploys only the underlying backbone, which now produces highly robust, pristine face embeddings.</p>
+
+  <!-- Projection Head Visual -->
+  <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 my-6 not-prose">
+    <h4 class="font-bold text-slate-700 mb-3 text-sm">📊 Feature Collapse vs Uniform Scattering</h4>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="text-center">
+        <canvas id="collapse-canvas" width="160" height="160" class="rounded-full border border-red-200 bg-white mx-auto block"></canvas>
+        <p class="text-xs text-red-600 font-semibold mt-2">❌ Without Projection Head<br><span class="text-slate-400 font-normal">Feature collapse: all points in one region</span></p>
+      </div>
+      <div class="text-center">
+        <canvas id="uniform-canvas" width="160" height="160" class="rounded-full border border-emerald-200 bg-white mx-auto block"></canvas>
+        <p class="text-xs text-emerald-600 font-semibold mt-2">✅ With Projection Head<br><span class="text-slate-400 font-normal">Uniform: scattered across entire sphere</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 5 ════════════ -->
+<section id="uncertainty" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-rose-100 text-rose-700 mb-3">Section 05</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">Image Quality, Feature Norms &amp; Uncertainty</h2>
+
+  <h3>Image Quality, Feature Norms, and Uncertainty</h3>
+  <p>While supervised contrastive learning is exceptionally powerful, it suffers from a catastrophic vulnerability when applied to unconstrained, real-world face recognition: it assumes all data is equally valuable.</p>
+  <p>In a perfectly curated dataset, every image is a high-resolution, forward-facing mugshot. In this environment, the SCL tug-of-war works flawlessly. However, real-world datasets are contaminated with "Type 2 hard samples". These are exceptionally low-quality images corrupted by severe motion blur, terrible lighting, low camera resolution, or heavy occlusion (such as sunglasses or medical masks).</p>
+  <p>When a standard SCL model encounters a heavily blurred, unrecognizable face, the contrastive loss function still blindly applies maximum force, desperately trying to push the blurry image away from negatives and pull it toward positives. Because the image contains no actual facial geometry, the neural network is forced to latch onto random background noise, digital compression artifacts, or lighting glares to satisfy the loss function. This causes the model to severely overfit to noise, destroying its ability to generalize to new faces. To prevent this structural collapse, the neural network must be taught to recognize its own uncertainty.</p>
+
+  <!-- VISUAL: Blurry face hover-to-reveal -->
+  <div class="flex flex-col md:flex-row gap-6 items-center bg-white border border-rose-200 rounded-xl p-6 my-8 not-prose shadow-sm">
+    <div class="w-40 h-40 rounded-xl overflow-hidden relative flex-shrink-0 border-2 border-dashed border-rose-300 flex items-center justify-content-center shadow">
+      <div class="blurry-face w-full h-full bg-gradient-to-br from-slate-300 to-slate-500 flex items-center justify-center text-6xl select-none">😶</div>
+      <div class="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none">
+        <span class="text-xs bg-white/90 text-rose-600 font-bold rounded px-2 py-0.5 shadow">Hover to Focus</span>
+      </div>
+    </div>
+    <div class="flex-1">
+      <h4 class="font-bold text-rose-700 text-base mb-2">⚠️ The Danger of Blind Contrastive Force</h4>
+      <p class="text-sm text-slate-600 leading-relaxed">When a standard SCL model encounters a heavily blurred, unrecognizable face, the contrastive loss function still blindly applies maximum force, desperately trying to push the blurry image away from negatives and pull it toward positives. Because the image contains no actual facial geometry, the neural network is forced to latch onto random background noise, digital compression artifacts, or lighting glares to satisfy the loss function. This causes the model to severely overfit to noise, destroying its ability to generalize to new faces.</p>
+      <div class="mt-3 flex gap-2">
+        <span class="text-xs bg-red-100 text-red-700 rounded-full px-3 py-1 font-semibold">🚫 Memorizes noise</span>
+        <span class="text-xs bg-red-100 text-red-700 rounded-full px-3 py-1 font-semibold">🚫 Geometric collapse</span>
+        <span class="text-xs bg-red-100 text-red-700 rounded-full px-3 py-1 font-semibold">🚫 Poor generalization</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>The Feature Norm as a Proxy for Quality</h3>
+  <p>The UCFace architecture solves this dilemma by weaponizing the "feature norm". When an image passes through the CNN backbone, it generates a vector. Before this vector undergoes <span class="math-term" data-def="L₂ normalization: v̂ = v / ‖v‖. This erases the magnitude, leaving only direction. The feature norm ‖v‖ is captured BEFORE this operation.">L₂ normalization</span> to be snapped onto the unit hypersphere, it possesses a specific mathematical magnitude or length. This pre-normalization length is the feature norm, denoted as <span class="math-term" data-def="Feature norm ‖z‖: the raw Euclidean magnitude of the embedding vector BEFORE L₂ normalization. A high-quality image → large ‖z‖. A blurry image → small ‖z‖. This becomes κ in the vMF distribution.">‖z‖</span>.</p>
+  <p>Empirical studies have repeatedly demonstrated a profound, intrinsic correlation between the magnitude of the feature norm and the objective visual quality of the input image. When a neural network processes a high-quality, perfectly illuminated face, its internal neurons fire with extreme confidence, producing a vector with a massive feature norm. Conversely, when the network processes a dark, blurry, unrecognizable face, the neurons fail to activate strongly. The resulting vector is weak and stunted, possessing a very small feature norm.</p>
+  <p>The UCFace paper capitalizes on this phenomenon by establishing the feature norm as an inverse proxy for epistemic uncertainty.</p>
+  <p>Large Feature Norm = High Quality = Low Uncertainty. The model is highly confident that it has extracted meaningful facial identity traits.</p>
+  <p>Small Feature Norm = Low Quality = High Uncertainty. The model acknowledges that the image is degraded and lacks reliable identity information.</p>
+  <p>By mathematically isolating the feature norm before it is erased by L₂ normalization, the UCFace model gains a real-time, zero-cost barometer of image quality, entirely bypassing the need to train complex, secondary quality-assessment algorithms.</p>
+
+  <!-- VISUAL: Feature Norm Gauge -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 my-8 shadow-sm not-prose">
+    <h4 class="font-bold text-slate-700 text-base mb-1">📊 Feature Norm ↔ Image Quality Relationship</h4>
+    <p class="text-xs text-slate-500 mb-4">Drag the slider to simulate different image qualities and observe how feature norm and uncertainty change</p>
+    <div class="flex items-center gap-4 mb-6">
+      <span class="text-xs font-bold text-slate-500">🌫️<br>Very Blurry</span>
+      <input type="range" id="quality-slider" min="1" max="100" value="85" class="flex-1">
+      <span class="text-xs font-bold text-slate-500">📷<br>HD Clear</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="text-center p-4 rounded-xl border" id="face-quality-card">
+        <div class="text-4xl mb-2" id="face-emoji">😀</div>
+        <div class="text-sm font-bold" id="quality-label">High Quality</div>
+        <div class="text-xs text-slate-400" id="quality-desc">Sharp, well-lit</div>
+      </div>
+      <div class="text-center p-4 rounded-xl bg-blue-50 border border-blue-200">
+        <div class="text-3xl font-extrabold text-blue-600 mb-1" id="norm-display">94</div>
+        <div class="text-sm font-semibold text-blue-700">Feature Norm ‖z‖</div>
+        <div class="mt-2 h-3 bg-blue-100 rounded-full overflow-hidden"><div class="h-full bg-blue-500 rounded-full transition-all duration-500" id="norm-bar" style="width:94%"></div></div>
+        <div class="text-xs text-slate-400 mt-1">κ in vMF distribution</div>
+      </div>
+      <div class="text-center p-4 rounded-xl border" id="uncertainty-card">
+        <div class="text-3xl font-extrabold mb-1" id="uncertainty-display" style="color:#22c55e;">LOW</div>
+        <div class="text-sm font-semibold" id="uncertainty-label">Uncertainty</div>
+        <div class="text-xs text-slate-400 mt-1" id="uncertainty-desc">Sharp vMF spotlight → aggressive learning</div>
+      </div>
+    </div>
+    <!-- Hard sample types -->
+    <div class="grid grid-cols-2 gap-3 mt-5">
+      <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+        <div class="font-bold text-amber-700 text-sm mb-1">Type 1 Hard Samples</div>
+        <p class="text-xs text-amber-800">Unseen but information-rich faces — the model hasn't learned them yet, but they contain valid identity information. SCL should learn from these.</p>
+        <span class="text-xs bg-emerald-100 text-emerald-700 rounded px-2 py-0.5 mt-2 inline-block font-semibold">✓ Learnable</span>
+      </div>
+      <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+        <div class="font-bold text-red-700 text-sm mb-1">Type 2 Hard Samples</div>
+        <p class="text-xs text-red-800">Low-quality, blurry, or heavily occluded faces — lack sufficient identity geometry. Standard SCL blindly overfits to noise on these.</p>
+        <span class="text-xs bg-red-100 text-red-700 rounded px-2 py-0.5 mt-2 inline-block font-semibold">✗ Problematic for SCL</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 6 ════════════ -->
+<section id="vmf" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-purple-100 text-purple-700 mb-3">Section 06</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">Directional Statistics &amp; the vMF Distribution</h2>
+
+  <h3>Directional Statistics and the von Mises-Fisher Distribution</h3>
+  <p>To inject this concept of uncertainty directly into the geometric space of the hypersphere, the researchers turned to the field of directional statistics, pioneered by Sir Ronald Fisher in 1953.</p>
+  <p>Standard statistical modeling relies heavily on the Gaussian (Normal) distribution. The Gaussian distribution famously produces the classic "bell curve," describing how data naturally clusters around a central mean on a flat, infinite plane. However, attempting to use a flat Gaussian distribution to model data on the curved surface of a hypersphere is mathematically disastrous. The flat plane cannot properly wrap around the curvature of the sphere, leading to severe distortions.</p>
+  <p>The correct mathematical tool for modeling probabilities on a spherical manifold is the von Mises-Fisher (vMF) distribution. The vMF distribution is the exact spherical analogue to the Gaussian distribution.</p>
+  <p>To conceptualize the vMF distribution, one can return to the analogy of a globe in a dark room. Imagine holding a powerful flashlight and aiming it at a specific coordinate on the globe. The illuminated area represents the probability distribution. The vMF distribution is defined by two critical parameters:</p>
+  <p>The Mean Direction (<span class="math-term" data-def="Mean Direction μ: the unit vector pointing to the center of the vMF distribution. In UCFace, μ = ẑᵢ = zᵢ/‖zᵢ‖ — the L₂-normalized embedding. Like the center coordinate where the flashlight beam points.">μ</span>): This represents the exact coordinate on the globe where the absolute center of the flashlight beam is pointing. This is analogous to the mean average in a standard bell curve.</p>
+  <p>The Concentration Parameter (<span class="math-term" data-def="Concentration κ: controls the sharpness/spread of the vMF distribution. In UCFace, κ = ‖z‖ (feature norm). κ=0 → uniform distribution over whole sphere. κ→∞ → point mass at μ. High quality image → large κ → sharp spotlight.">κ</span>): This represents the tightness, or focus, of the flashlight beam. This is the inverse analogue to variance (standard deviation) in a bell curve.</p>
+  <p>If the concentration parameter κ (kappa) is extremely high, the flashlight beam is dialed into a razor-sharp, blinding laser pointer. The distribution is highly concentrated around the mean direction, indicating absolute certainty. If κ is very low, the flashlight beam is widened into a diffuse, ambient floodlight that washes over the entire hemisphere. The exact location of the mean direction is highly uncertain. If κ reaches exactly zero, the light spreads perfectly evenly across the entire surface of the globe, resulting in a completely uniform distribution.</p>
+
+  <!-- VISUAL: Dark room flashlight analogy -->
+  <div class="bg-slate-900 text-white rounded-xl p-6 my-8 not-prose shadow-xl">
+    <h4 class="font-bold text-blue-300 text-base mb-1 flex items-center gap-2">🔦 The Flashlight Analogy — Interactive</h4>
+    <p class="text-slate-400 text-xs mb-5">Adjust κ to see how the probability spotlight changes on the globe surface</p>
+    <div class="flex flex-col md:flex-row gap-6 items-center">
+      <canvas id="vmf-canvas" width="220" height="220" class="rounded-full border-2 border-slate-700 mx-auto flex-shrink-0"></canvas>
+      <div class="flex-1 space-y-4">
+        <div>
+          <div class="flex justify-between text-sm font-semibold text-cyan-300 mb-2">
+            <span>Concentration κ (= Feature Norm ‖z‖)</span>
+            <span class="text-blue-400 font-bold" id="kappa-val">κ = 12.0</span>
+          </div>
+          <input type="range" id="kappa-slider" min="0" max="100" value="60" class="w-full">
+          <div class="flex justify-between text-xs text-slate-500 mt-1">
+            <span class = "text-cyan-300">κ=0: Uniform (max uncertainty)</span>
+            <span class="text-cyan-300">κ=∞: Point mass (zero uncertainty)</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mt-2">
+          <div class="bg-slate-800 rounded-lg p-3 text-center">
+            <div class="text-lg font-extrabold" id="kappa-quality" style="color:#60a5fa;">HIGH</div>
+            <div class="text-xs text-purple-400">Image Quality</div>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3 text-center">
+            <div class="text-lg font-extrabold" id="kappa-certainty" style="color:#34d399;">LOW</div>
+            <div class="text-xs text-purple-400">Uncertainty</div>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3 text-center">
+            <div class="text-lg font-extrabold" id="kappa-force" style="color:#f472b6;">STRONG</div>
+            <div class="text-xs text-purple-400">Learning Force</div>
+          </div>
+        </div>
+        <div class="bg-red-800 rounded-lg p-3 text-sm text-slate-300 leading-relaxed" id="kappa-desc">
+          Sharp laser pointer. Model is confident — applies maximum pull on positives and aggressive push on negatives. Aggressive discriminative learning.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISUAL: Gaussian vs vMF comparison -->
+  <div class="grid md:grid-cols-2 gap-5 my-6 not-prose">
+    <div class="bg-red-50 border border-red-200 rounded-xl p-5 glow-card">
+      <h4 class="font-bold text-red-700 mb-2 text-sm">❌ Gaussian Distribution (Wrong Tool)</h4>
+      <div class="flex items-center gap-4">
+        <canvas id="gaussian-canvas" width="100" height="80" class="rounded bg-white border border-red-100"></canvas>
+        <p class="text-xs text-red-800 leading-relaxed">Lives on a flat, infinite plane. Cannot wrap around the curvature of the hypersphere. Using Gaussian on spherical data leads to severe mathematical distortions.</p>
+      </div>
+    </div>
+    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-5 glow-card">
+      <h4 class="font-bold text-emerald-700 mb-2 text-sm">✅ vMF Distribution (Correct Tool)</h4>
+      <div class="flex items-center gap-4">
+        <canvas id="vmf-mini-canvas" width="100" height="80" class="rounded bg-white border border-emerald-100"></canvas>
+        <p class="text-xs text-emerald-800 leading-relaxed">Lives natively on the curved surface of the hypersphere. Parameterized by mean direction μ and concentration κ. The exact spherical analogue to the Gaussian.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>The Normalization Constant and the Bessel Function</h3> 
+  <p>A fundamental law of probability states that the sum of all probabilities within a distribution must equal exactly 1 (or 100%). Because the vMF distribution exists on the curved, bounded surface of a hypersphere, ensuring that the probability density perfectly integrates to 1 requires a complex mathematical counterbalance.</p>
+  <p>This counterbalance is the normalization constant, denoted as <span class="math-term" data-def="C(κ) = κ^(d/2−1) / ((2π)^(d/2) · I_{d/2−1}(κ)). Ensures the vMF probability density integrates to exactly 1 across the entire hypersphere surface regardless of dimension d.">C(κ)</span>. Calculating C(κ) for a high-dimensional hypersphere requires the use of the Modified Bessel Function of the First Kind, denoted as <span class="math-term" data-def="Modified Bessel Function of the First Kind Iᵥ(κ): appears in solutions to differential equations on spherical/cylindrical domains. Unlike oscillating Bessel functions, Iᵥ grows exponentially. Used here to correctly normalize probability on the hypersphere surface.">Iᵥ(κ)</span>.</p>
+  <p>In classical physics and applied mathematics, Bessel functions are specialized tools used to solve differential equations regarding wave propagation in circular, cylindrical, or spherical domains. For instance, they describe the exact mathematical ripples that form when a stone is dropped into a circular pond, or the acoustic vibrations of a drumhead. While standard Bessel functions describe oscillating waves, the modified Bessel function of the first kind describes waves that grow or decay exponentially without oscillating. By dividing the raw exponential distribution by this Bessel-derived normalization constant, the vMF distribution maintains perfect mathematical integrity, allowing it to accurately map probability densities across any number of dimensions.</p>
+
+  <!-- VMF formula -->
+  <div class="bg-slate-900 text-white rounded-xl p-6 my-6 not-prose text-center shadow-lg border border-slate-700">
+    <p class="text-xs text-slate-400 uppercase tracking-widest mb-3 font-semibold">von Mises-Fisher Probability Density Function</p>
+    <div class="text-lg md:text-2xl font-mono text-yellow-300 my-2 overflow-x-auto whitespace-nowrap py-2">
+      vMF(x; μ, κ) = C(κ) · exp(κ μᵀ x)
+    </div>
+    <div class="grid grid-cols-3 gap-3 mt-4 text-xs">
+      <div class="bg-slate-800 rounded-lg p-3"><span class="text-yellow-300 font-bold font-mono">x</span><br><span class="text-red-400">Unit vector on hypersphere</span></div>
+      <div class="bg-slate-800 rounded-lg p-3"><span class="text-blue-300 font-bold font-mono">μᵀx</span><br><span class="text-red-400">Dot product = cosine similarity between x and mean</span></div>
+      <div class="bg-slate-800 rounded-lg p-3"><span class="text-emerald-300 font-bold font-mono">C(κ)</span><br><span class="text-red-400">Normalization constant using Bessel function</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 7 ════════════ -->
+<section id="architecture" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-teal-100 text-teal-700 mb-3">Section 07</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">The UCFace Architecture</h2>
+
+  <h3>The UCFace Architecture</h3>
+  <p>The primary architectural breakthrough of the UCFace model is the brilliant synthesis of the vMF distribution with supervised contrastive learning.</p>
+  <p>In standard contrastive learning, an anchor image is treated as a single, deterministic point—a tiny, infinitely dense dot on the hypersphere. The UCFace architecture completely abolishes this concept. Instead of a point, UCFace reinterprets every anchor image as a probabilistic von Mises-Fisher distribution.</p>
+  <p>When an image passes through the neural network, the model utilizes the output to construct the vMF spotlight:</p>
+  <p>The raw embedding vector zᵢ is L₂ normalized to become a unit vector ẑᵢ. This normalized vector dictates the exact coordinate on the hypersphere. UCFace assigns this as the mean direction (μ) of the vMF distribution.</p>
+  <p>The model measures the raw magnitude of the vector before normalization. This is the feature norm, ‖zᵢ‖. Because feature norm perfectly correlates with image quality, UCFace assigns this directly as the concentration parameter (κ) of the vMF distribution.</p>
+  <p>This creates a highly dynamic geometric environment. If the anchor image is a high-resolution, perfectly clear photograph, it generates a massive feature norm. Consequently, κ is huge, and the anchor becomes a sharp, highly concentrated vMF spotlight. There is zero uncertainty regarding the identity. Conversely, if the anchor image is a heavily degraded, blurry surveillance photo, it generates a tiny feature norm. κ is infinitesimally small, and the anchor becomes a massive, diffuse, highly uncertain probability cloud covering a massive region of the hypersphere.</p>
+
+  <!-- VISUAL: Full Architecture Diagram -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm my-8 not-prose overflow-x-auto">
+    <h4 class="font-bold text-slate-700 text-base mb-4">🏗️ UCFace Full Training Pipeline</h4>
+    <canvas id="arch-canvas" width="740" height="280" class="w-full max-w-full"></canvas>
+  </div>
+
+  <h3>The Uncertainty-Aware Tug-of-War</h3>
+  <p>By transforming the anchor into a probability distribution, the contrastive learning tug-of-war is fundamentally altered. The model no longer calculates the rigid cosine distance between points; instead, it calculates the probability density of the positive and negative samples falling within the anchor's vMF spotlight.</p>
+  <p>This elegantly regulates the forces of the tug-of-war based entirely on image quality:</p>
+  <p>High Quality Anchor (Low Uncertainty): The vMF distribution is a sharp, intense spotlight. If a positive sample drifts even slightly away from the center of the spotlight, its probability density collapses. To prevent this, the loss function applies an incredibly violent "pull" force to drag the positive sample back into the center. Simultaneously, negative samples are hit with a massive "push" force to eject them from the spotlight. The model confidently carves out aggressive, highly discriminative geometric boundaries.</p>
+  <p>Low Quality Anchor (High Uncertainty): The vMF distribution is a massive, diffuse, hazy cloud. The probability density is relatively flat across a huge area. Because the model openly acknowledges its own uncertainty, it applies an extremely weak, forgiving "pull" on positive samples, allowing them to drift loosely within the cloud. More importantly, it applies a very gentle "push" to negative samples. The model refuses to panic. It refuses to tear the embedding space apart or memorize background noise to force an artificial separation.</p>
+  <p>By dynamically regulating these forces, UCFace achieves the holy grail of metric learning: it learns aggressively from pristine data while gracefully ignoring the destructive noise of degraded data.</p>
+
+  <!-- VISUAL: Interactive vMF Tug of War (scatter) -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 my-8 shadow-sm not-prose">
+    <div class="flex flex-wrap justify-between items-center mb-4 gap-3">
+      <h4 class="font-bold text-slate-700 text-base">🎯 Visualizing the Uncertainty-Aware Tug-of-War</h4>
+      <div class="flex gap-2">
+        <button id="btn-hq" onclick="setQuality('high')" class="tab-btn active text-sm">High Quality Anchor</button>
+        <button id="btn-lq" onclick="setQuality('low')" class="tab-btn text-sm">Low Quality Anchor</button>
+      </div>
+    </div>
+    <p class="text-xs text-slate-500 mb-4" id="scatter-desc">High Quality: Sharp vMF spotlight — applies maximum pull/push forces.</p>
+    <div class="chart-wrap"><canvas id="distributionChart"></canvas></div>
+    <div id="dynamic-explanation" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+      <strong>High Quality Anchor:</strong> The model is confident. If a positive sample drifts slightly away, the loss function applies violent "pull" forces to drag it back. Negative samples are hit with massive "push" forces.
+    </div>
+  </div>
+
+  <!-- VISUAL: Side-by-side vMF comparison visual -->
+  <div class="grid md:grid-cols-2 gap-5 my-6 not-prose">
+    <div class="bg-blue-600 text-white rounded-xl p-5 relative overflow-hidden">
+      <div class="absolute top-3 right-3 text-xs bg-white/20 text-white font-bold px-2 py-0.5 rounded-full">LOW UNCERTAINTY</div>
+      <canvas id="hq-sphere" width="160" height="160" class="mx-auto block mb-3 rounded-full border-2 border-white/30"></canvas>
+      <h4 class="font-bold text-base mb-1 text-center">High Quality Image</h4>
+      <div class="grid grid-cols-3 gap-2 text-center text-xs mt-3">
+        <div class="bg-white/20 rounded p-2"><div class="font-bold">LARGE</div><div class="text-blue-100">‖z‖ Norm</div></div>
+        <div class="bg-white/20 rounded p-2"><div class="font-bold">SHARP</div><div class="text-blue-100">Distribution</div></div>
+        <div class="bg-white/20 rounded p-2"><div class="font-bold">STRONG</div><div class="text-blue-100">Learning Force</div></div>
+      </div>
+    </div>
+    <div class="bg-pink-600 text-white rounded-xl p-5 relative overflow-hidden">
+      <div class="absolute top-3 right-3 text-xs bg-white/20 text-white font-bold px-2 py-0.5 rounded-full">HIGH UNCERTAINTY</div>
+      <canvas id="lq-sphere" width="160" height="160" class="mx-auto block mb-3 rounded-full border-2 border-white/30"></canvas>
+      <h4 class="font-bold text-base mb-1 text-center">Low Quality Image</h4>
+      <div class="grid grid-cols-3 gap-2 text-center text-xs mt-3">
+        <div class="bg-white/20 rounded p-2"><div class="font-bold">SMALL</div><div class="text-slate-200">‖z‖ Norm</div></div>
+        <div class="bg-white/20 rounded p-2"><div class="font-bold">DIFFUSE</div><div class="text-slate-200">Distribution</div></div>
+        <div class="bg-white/20 rounded p-2"><div class="font-bold">WEAK</div><div class="text-slate-200">Learning Force</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 8 ════════════ -->
+<section id="math" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-yellow-100 text-yellow-700 mb-3">Section 08</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">Mathematical Formulation — Symbol by Symbol</h2>
+
+  <h3>Angular Margin-Based Softmax Classifiers</h3>
+  <p>The execution of the UCFace architecture requires a precise sequence of mathematical formulations. The system operates as a hybrid, combining traditional angular margin-based softmax classifiers with the novel uncertainty-aware contrastive loss.</p>
+  <p>To establish a baseline geometry, the paper utilizes highly advanced softmax classifiers that explicitly enforce angular margins between identities. The generic mathematical objective for optimizing a single face sample, denoted as i, is expressed as follows:</p>
+
+  <!-- VISUAL: Baseline Loss Formula with clickable symbols -->
+  <div class="bg-slate-900 p-6 rounded-xl shadow-lg text-center my-6 not-prose border border-slate-700 overflow-x-auto">
+    <p class="text-slate-400 text-xs uppercase tracking-widest mb-3 font-semibold">Angular Margin Softmax Loss</p>
+    <div class="text-white font-mono text-base md:text-xl overflow-x-auto py-2 whitespace-nowrap">
+      $$\mathcal{L}_{i} = - \log \frac{\exp(h(\theta_{i}^{(y)}, m, s))}{\sum_{j=1}^{K} \exp(h(\theta_{i}^{(j)}, m, s))}$$
+    </div>
+  </div>
+
+  <!-- Symbol table: clickable -->
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm my-6 not-prose overflow-hidden">
+    <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 font-bold text-sm text-slate-600">📖 Symbol Reference — Click a symbol to highlight its role</div>
+    <div class="divide-y divide-slate-100" id="symbol-table">
+      <div class="symbol-row flex items-start gap-4 px-5 py-3 hover:bg-blue-50 cursor-pointer transition" data-sym="Li">
+        <div class="w-16 font-mono text-sm font-bold text-blue-600 flex-shrink-0 pt-0.5">𝓛ᵢ</div>
+        <div class="text-sm text-slate-600">The calculated loss (error penalty) for the specific sample i. The network attempts to minimize this number to zero.</div>
+      </div>
+      <div class="symbol-row flex items-start gap-4 px-5 py-3 hover:bg-blue-50 cursor-pointer transition" data-sym="K">
+        <div class="w-16 font-mono text-sm font-bold text-blue-600 flex-shrink-0 pt-0.5">K</div>
+        <div class="text-sm text-slate-600">The total number of unique identities present in the training dataset.</div>
+      </div>
+      <div class="symbol-row flex items-start gap-4 px-5 py-3 hover:bg-blue-50 cursor-pointer transition" data-sym="theta">
+        <div class="w-16 font-mono text-sm font-bold text-blue-600 flex-shrink-0 pt-0.5">θᵢ^(j)</div>
+        <div class="text-sm text-slate-600">The literal angle measured in the hypersphere between the embedding vector of sample i and the geometric center (prototype) of identity j.</div>
+      </div>
+      <div class="symbol-row flex items-start gap-4 px-5 py-3 hover:bg-blue-50 cursor-pointer transition" data-sym="y">
+        <div class="w-16 font-mono text-sm font-bold text-blue-600 flex-shrink-0 pt-0.5">y</div>
+        <div class="text-sm text-slate-600">The actual ground-truth label (the true identity) of sample i. Therefore, θᵢ^(y) represents the angle between the sample and its correct identity prototype.</div>
+      </div>
+      <div class="symbol-row flex items-start gap-4 px-5 py-3 hover:bg-blue-50 cursor-pointer transition" data-sym="m">
+        <div class="w-16 font-mono text-sm font-bold text-blue-600 flex-shrink-0 pt-0.5">m</div>
+        <div class="text-sm text-slate-600">The mathematical margin — an artificial penalty forcefully injected into the equation to pry different identities further apart, ensuring massive geometric boundaries.</div>
+      </div>
+      <div class="symbol-row flex items-start gap-4 px-5 py-3 hover:bg-blue-50 cursor-pointer transition" data-sym="s">
+        <div class="w-16 font-mono text-sm font-bold text-blue-600 flex-shrink-0 pt-0.5">s</div>
+        <div class="text-sm text-slate-600">The scaling factor. Because cosine values only range from −1 to 1, this scalar multiplies the space, distributing the embeddings properly across the vast surface of the hypersphere.</div>
+      </div>
+      <div class="symbol-row flex items-start gap-4 px-5 py-3 hover:bg-blue-50 cursor-pointer transition" data-sym="h">
+        <div class="w-16 font-mono text-sm font-bold text-blue-600 flex-shrink-0 pt-0.5">h(·)</div>
+        <div class="text-sm text-slate-600">The margin function — defines exactly how the margin penalty m is mathematically applied to the angle.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISUAL: Baseline methods tabs -->
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm my-6 not-prose">
+    <div class="p-4 border-b border-slate-100">
+      <h4 class="font-bold text-slate-700 mb-3 text-sm">⚙️ Baseline Margin Functions — Tap to Explore</h4>
+      <div class="flex flex-wrap gap-2">
+        <button class="tab-btn active" onclick="showMargin('cosface',this)">CosFace</button>
+        <button class="tab-btn" onclick="showMargin('arcface',this)">ArcFace</button>
+        <button class="tab-btn" onclick="showMargin('magface',this)">MagFace</button>
+        <button class="tab-btn" onclick="showMargin('adaface',this)">AdaFace</button>
+      </div>
+    </div>
+    <div class="p-5">
+      <div id="margin-cosface" class="tab-panel active">
+        <div class="flex items-center gap-3 mb-3"><span class="text-2xl">🔵</span><h5 class="font-bold text-slate-700">CosFace — Cosine Space Margin</h5></div>
+        <div class="font-mono text-blue-700 bg-blue-50 rounded-lg p-3 text-center text-lg mb-3">h = s(cos θ − m)</div>
+        <p class="text-sm text-slate-600">Applies the margin directly to the cosine output. Subtracts a fixed constant m from the cosine similarity of the correct class. Simple, effective, widely adopted baseline.</p>
+      </div>
+      <div id="margin-arcface" class="tab-panel">
+        <div class="flex items-center gap-3 mb-3"><span class="text-2xl">🟣</span><h5 class="font-bold text-slate-700">ArcFace — Angular Space Margin</h5></div>
+        <div class="font-mono text-violet-700 bg-violet-50 rounded-lg p-3 text-center text-lg mb-3">h = s cos(θ + m)</div>
+        <p class="text-sm text-slate-600">Applies the margin directly to the angle itself before computing the cosine, altering the raw geodesic distance on the hypersphere. More geometrically principled than CosFace.</p>
+      </div>
+      <div id="margin-magface" class="tab-panel">
+        <div class="flex items-center gap-3 mb-3"><span class="text-2xl">🟡</span><h5 class="font-bold text-slate-700">MagFace — Feature Norm Adaptive Margin</h5></div>
+        <div class="font-mono text-amber-700 bg-amber-50 rounded-lg p-3 text-center text-base mb-3">m = (u_m−l_m)/(u_a−l_a) · (‖rᵢ‖−l_a) + l_m</div>
+        <p class="text-sm text-slate-600">A dynamic margin system where the margin m expands or contracts based on the feature norm ‖rᵢ‖ of the sample. Recognizes that higher-quality images should have tighter margins.</p>
+      </div>
+      <div id="margin-adaface" class="tab-panel">
+        <div class="flex items-center gap-3 mb-3"><span class="text-2xl">🟢</span><h5 class="font-bold text-slate-700">AdaFace — Batch-Adaptive Margin</h5></div>
+        <div class="font-mono text-emerald-700 bg-emerald-50 rounded-lg p-3 text-center text-base mb-3">‖dr‖ = ⌊(‖rᵢ‖−μᵣ)/(σᵣ/h)⌋₋₁</div>
+        <p class="text-sm text-slate-600">Normalizes the feature norm relative to the batch moving mean μᵣ and standard deviation σᵣ, automatically adjusting the margin based on the relative difficulty of each sample.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>The Uncertainty-Aware Contrastive Loss (𝓛_U)</h3>
+  <p>To calculate the contrastive loss, the system must measure the similarity between the vMF probability distribution of the anchor (denoted as zᵢ) and the deterministic vectors of the positive and negative samples (denoted as zⱼ).</p>
+  <p>The raw probability density function of the vMF distribution for an arbitrary unit vector x is defined as: vMF(x; μ, κ) = C(κ) · exp(κ μᵀx)</p>
+  <p>Traditional SCL models evaluate similarity using raw cosine distance. UCFace radically departs from this by evaluating similarity using the logarithm of the probability density. The similarity between an anchor distribution zᵢ and a target sample zⱼ is computed as: sim(zⱼ, zᵢ) = log V_{zᵢ}(zⱼ)</p>
+  <p>Why apply a logarithmic transformation? In complex probability theory, calculating joint probabilities requires multiplying long strings of decimals together (e.g., 0.001 × 0.001). This rapidly leads to numbers so infinitesimally small that modern computer processors round them to absolute zero, a catastrophic failure known as "numerical underflow". By mapping the probabilities into log-space, exponential multiplications are magically transformed into simple, stable linear additions. Furthermore, log-probability behaves monotonically—meaning it scales smoothly and predictably in the exact same manner as cosine similarity, making it a perfect, mathematically stable analog for physical distance.</p>
+  <p>Utilizing this log-probability similarity, the final Uncertainty-Aware Contrastive Loss objective is formulated as:</p>
+
+  <!-- VISUAL: UCFace Loss Formula + symbol breakdown -->
+  <div class="bg-slate-900 p-6 rounded-xl shadow-lg text-center my-6 not-prose border border-slate-700 overflow-x-auto">
+    <p class="text-slate-400 text-xs uppercase tracking-widest mb-3 font-semibold">Uncertainty-Aware Contrastive Loss</p>
+    <div class="text-white font-mono text-sm md:text-lg py-2 overflow-x-auto whitespace-nowrap">
+      $$\mathcal{L}_{U} = \frac{-1}{|P(i)|} \sum_{p \in P(i)} \log \frac{\exp(sim(\hat{z}_p, z_i) / \tau)}{\sum_{j \in \{B \setminus i\}} \exp(sim(\hat{z}_j, z_i) / \tau)}$$
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-4 my-6 not-prose">
+    <div class="bg-white border-l-4 border-blue-500 rounded-r-xl p-4 shadow-sm glow-card">
+      <div class="font-mono font-bold text-blue-600 text-base mb-1">P(i) and |P(i)|</div>
+      <p class="text-sm text-slate-600">The subset of positive samples sharing the same identity as the anchor, and its cardinality (absolute count). |P(i)| = 3 in the paper's setting.</p>
+    </div>
+    <div class="bg-white border-l-4 border-blue-500 rounded-r-xl p-4 shadow-sm glow-card">
+      <div class="font-mono font-bold text-blue-600 text-base mb-1">sim(ẑₚ, zᵢ)</div>
+      <p class="text-sm text-slate-600">The log-probability similarity score — the log of the vMF probability density. Replaces cosine similarity. Dynamically pulls positive samples toward the anchor distribution.</p>
+    </div>
+    <div class="bg-white border-l-4 border-blue-500 rounded-r-xl p-4 shadow-sm glow-card">
+      <div class="font-mono font-bold text-blue-600 text-base mb-1">B \ i</div>
+      <p class="text-sm text-slate-600">The entire training batch excluding the anchor itself, acting as the negative samples pushing against the anchor.</p>
+    </div>
+    <div class="bg-white border-l-4 border-violet-500 rounded-r-xl p-4 shadow-sm glow-card">
+      <div class="font-mono font-bold text-violet-600 text-base mb-1">Log-Sum-Exp</div>
+      <p class="text-sm text-slate-600">This fractional arrangement forces the network to relentlessly maximize positive density while crushing negative density — a smooth, stable approximation of the maximum function.</p>
+    </div>
+  </div>
+
+  <h3>The Total Training Objective</h3>
+  <p>UCFace is specifically engineered not to replace existing classifiers, but to enhance them. It operates as a modular add-on. The overall training loss that the network attempts to minimize is the sum of the standard baseline classifier loss (𝓛_C) and the novel uncertainty-aware contrastive loss (𝓛_U):</p>
+
+  <div class="bg-slate-900 p-6 rounded-xl my-6 text-center not-prose border border-slate-700">
+    <p class="text-slate-400 text-xs uppercase tracking-widest mb-3 font-semibold">Total Training Loss</p>
+    <div class="text-white font-mono text-xl overflow-x-auto py-2">$$\mathcal{L}_{total} = \mathcal{L}_{C} + \lambda \mathcal{L}_{U}$$</div>
+    <div class="grid grid-cols-3 gap-3 mt-4 text-xs">
+      <div class="bg-slate-800 rounded-lg p-3"><span class="text-yellow-300 font-bold font-mono">𝓛_C</span><br><span class="text-slate-400">Angular Margin Softmax Loss (ArcFace / CosFace etc.)</span></div>
+      <div class="bg-slate-800 rounded-lg p-3"><span class="text-blue-300 font-bold font-mono">𝓛_U</span><br><span class="text-slate-400">Uncertainty-Aware Contrastive Loss (UCFace's contribution)</span></div>
+      <div class="bg-slate-800 rounded-lg p-3"><span class="text-emerald-300 font-bold font-mono">λ = 1.0</span><br><span class="text-slate-400">Weighting factor — equal authority for both losses</span></div>
+    </div>
+  </div>
+
+  <p>The symbol λ (lambda) represents a weighting factor. It allows engineers to dial up or down the influence of the contrastive tug-of-war relative to the standard angular margin loss, ensuring perfect equilibrium during the training phase.</p>
+</section>
+
+<!-- ════════════════════════════════ SECTION 9 ════════════ -->
+<section id="training" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-cyan-100 text-cyan-700 mb-3">Section 09</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">Training Strategy &amp; Implementation</h2>
+
+  <h3>Training Strategy and Implementation</h3>
+  <p>To ensure the UCFace architecture functions as intended, the training strategy must be meticulously orchestrated. A contrastive learning model cannot learn if it does not have enough diverse samples to compare.</p>
+  <p>During each training iteration, the system constructs a highly specific mini-batch. It randomly selects N=32 unique identities from the massive training dataset. For each of these identities, the system applies data augmentation techniques to generate exactly 4 varied image samples, resulting in a total batch size of 128 images (32 × 4).</p>
+  <p>Because of this strict symmetric property, every single image in the batch gets a turn to act as the "anchor". When a specific image is chosen as the anchor, the remaining 3 images of that same identity serve as the positive samples (|P(i)| = 3). The remaining 124 images in the batch, belonging to the 31 other identities, serve as the negative samples. This ensures a massive, rich environment for the contrastive tug-of-war to unfold, providing 3 strong pull forces and 124 aggressive push forces for every single anchor.</p>
+  <p>Extensive hyperparameter tuning conducted by the researchers established the optimal baseline settings for stability. The temperature parameter τ is locked at 0.8, providing the perfect balance between penalizing hard negatives and maintaining geometric stability. The weighting factor λ is set to 1.0, giving the baseline loss and the contrastive loss equal authority over the network's learning trajectory.</p>
+  <p>The network utilizes robust convolutional backbones, specifically the lightweight MobileFaceNet (optimized for mobile devices) and the massive ResNet-50 architecture. The models are pre-trained on high-resolution, pristine face datasets like VGGFace2 and MS1MV3 to establish a baseline understanding of human facial geometry, before being fine-tuned using the UCFace objective to master uncertainty.</p>
+
+  <!-- VISUAL: Batch composition diagram -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm my-8 not-prose">
+    <h4 class="font-bold text-slate-700 text-base mb-4">🗂️ Mini-Batch Construction Visualizer</h4>
+    <canvas id="batch-canvas" width="700" height="220" class="w-full rounded-lg border border-slate-100 bg-slate-50"></canvas>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+        <div class="text-2xl font-extrabold text-blue-600">32</div>
+        <div class="text-xs text-slate-500 mt-1">Unique Identities<br>per batch (N)</div>
+      </div>
+      <div class="bg-violet-50 border border-violet-200 rounded-lg p-3 text-center">
+        <div class="text-2xl font-extrabold text-violet-600">128</div>
+        <div class="text-xs text-slate-500 mt-1">Total Batch Size<br>(32 × 4 augments)</div>
+      </div>
+      <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+        <div class="text-2xl font-extrabold text-emerald-600">3</div>
+        <div class="text-xs text-slate-500 mt-1">Positive Samples<br>per Anchor</div>
+      </div>
+      <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+        <div class="text-2xl font-extrabold text-red-500">124</div>
+        <div class="text-xs text-slate-500 mt-1">Negative Samples<br>per Anchor</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISUAL: Hyperparameter analysis chart -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm my-6 not-prose">
+    <h4 class="font-bold text-slate-700 text-base mb-1">🔬 Temperature τ Hyperparameter Analysis (SCFace d₁)</h4>
+    <p class="text-xs text-slate-500 mb-4">Rank-1 Identification Rate across different τ values — τ=0.8 achieves optimal performance</p>
+    <div class="chart-wrap-sm"><canvas id="tau-chart"></canvas></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 10 ════════════ -->
+<section id="metrics" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-orange-100 text-orange-700 mb-3">Section 10</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">Evaluation Metrics</h2>
+
+  <h3>Evaluation Metrics</h3>
+  <p>To prove that UCFace can survive in unconstrained, real-world open-set environments, the model is subjected to brutal evaluation metrics derived from international biometric standards.</p>
+
+  <h3>Rank-1 Identification Rate</h3>
+  <p>The Rank-1 Identification Rate is the most fundamental metric for evaluating a search algorithm. During the test, the system is handed a "probe" image of a face and tasked with searching a massive "gallery" database of known identities. The model computes the cosine similarity between the probe and every single face in the gallery, ranking them from highest similarity to lowest. The Rank-1 Identification Rate simply measures the percentage of searches where the absolute highest-scoring match at the very top of the list (Rank-1) is the correct identity.</p>
+  <h3>True Positive Identification Rate (TPIR) at False Positive Identification Rate (FPIR)</h3>
+  <p>Rank-1 accuracy possesses a massive flaw for real-world security analysis: it assumes that the target person actually exists in the gallery database. In a real-world deployment, such as a major international airport, the vast majority of the millions of faces scanned by the cameras do not belong to criminals on the watchlist. To evaluate how a model handles this reality, biometric scientists rely on the interplay between the False Positive Identification Rate (FPIR) and the True Positive Identification Rate (TPIR).</p>
+  <p>The FPIR (False Alarm Rate) is the frequency at which the system incorrectly matches an innocent, un-enrolled stranger to an identity existing in the database. If FPIR is high, airport security is constantly stopping innocent travelers, destroying operational efficiency and causing severe public relations nightmares.</p>
+  <p>The TPIR (Hit Rate) is the frequency at which the system successfully detects and correctly matches a true target to their profile in the database. If TPIR is low, criminals and threats pass through the security checkpoint completely undetected.</p>
+  <p>To govern this system, human operators must set a mathematical threshold. If a similarity score falls below the threshold, the system ignores the face. If the score breaches the threshold, alarms sound. If the threshold is set too low, the system catches every criminal (High TPIR) but triggers thousands of false alarms on innocent people (High FPIR). If the threshold is set too high, false alarms drop to zero (Low FPIR), but the system becomes so strict that it ignores actual threats (Low TPIR).</p>
+  <p>Therefore, the ultimate test of a biometric model is to measure its Hit Rate (TPIR) when the system is mathematically choked by a brutally strict False Alarm constraint. The paper evaluates the models using TPIR @ FPIR = 0.01. This metric asks the definitive operational question: "How high is our Hit Rate (TPIR) when the system threshold is tuned so strictly that it is only permitted to generate 1 false alarm for every 100 innocent travelers scanned?". Models that score highly on this metric are the only models mathematically fit for mission-critical, high-stakes security deployment.</p>
+
+  <!-- VISUAL: Interactive TPIR/FPIR Threshold Demo -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm my-8 not-prose">
+    <h4 class="font-bold text-slate-700 text-base mb-1">⚖️ TPIR vs FPIR — The Threshold Trade-off</h4>
+    <p class="text-xs text-slate-500 mb-4">Drag the threshold slider to see how TPIR and FPIR trade off against each other</p>
+    <div class="flex items-center gap-3 mb-5">
+      <span class="text-xs font-bold text-slate-500">Strict<br>Threshold</span>
+      <input type="range" id="thresh-slider" min="1" max="100" value="70" class="flex-1">
+      <span class="text-xs font-bold text-slate-500">Loose<br>Threshold</span>
+    </div>
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div class="rounded-xl p-4 text-center border-2" id="tpir-card" style="border-color:#10b981;background:#f0fdf4;">
+        <div class="text-3xl font-extrabold" id="tpir-val" style="color:#059669;">72%</div>
+        <div class="text-sm font-bold text-emerald-700 mt-1">TPIR (Hit Rate)</div>
+        <div class="text-xs text-slate-500">Criminals caught</div>
+      </div>
+      <div class="rounded-xl p-4 text-center border-2" id="fpir-card" style="border-color:#f59e0b;background:#fffbeb;">
+        <div class="text-3xl font-extrabold" id="fpir-val" style="color:#d97706;">18%</div>
+        <div class="text-sm font-bold text-amber-700 mt-1">FPIR (False Alarms)</div>
+        <div class="text-xs text-slate-500">Innocent travelers stopped</div>
+      </div>
+    </div>
+    <div class="p-3 rounded-lg text-sm border" id="thresh-desc" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;">
+      Moderate threshold. Balances hits and false alarms.
+    </div>
+    <div class="mt-3 bg-slate-900 text-white rounded-lg p-3 text-xs text-center">
+      <span class="text-yellow-300 font-bold">UCFace Test: TPIR @ FPIR = 0.01</span><span class="text-black font-bold"> — only 1 false alarm per 100 innocent travelers permitted</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 11 ════════════ -->
+<section id="results" class="mb-24 scroll-mt-12">
+  <div class="sec-badge bg-emerald-100 text-emerald-700 mb-3">Section 11</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">Results &amp; Interpretation</h2>
+
+  <h3>Breakthroughs in Low-Resolution Environments</h3>
+  <p>The researchers subjected the UCFace methodology to an exhaustive battery of benchmark tests, evaluating its performance as an add-on against state-of-the-art baselines across a spectrum of image resolutions.</p>
+  <p>The true power of UCFace is uniquely illuminated by its performance on severely degraded, low-resolution datasets. The researchers evaluated the models on QMUL-TinyFace, QMUL-SurvFace (derived from blurry CCTV cameras), and SCFace (which explicitly tests performance across different distances, with d₁ representing extremely distant, heavily blurred images and d₃ representing closer, higher-quality images).</p>
+  <p>Table I presents the performance of the lightweight MobileFaceNet backbone.</p>
+
+  <!-- Results table -->
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm my-6 not-prose overflow-hidden">
+    <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 font-bold text-sm text-slate-600">Table I — MobileFaceNet Backbone Performance (Low-Resolution Datasets)</div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-xs text-slate-500 uppercase font-semibold">
+          <tr>
+            <th class="px-4 py-3 text-left">Method</th>
+            <th class="px-4 py-3">TinyFace<br>(w/o dist.)</th>
+            <th class="px-4 py-3">TinyFace<br>(w/ dist.)</th>
+            <th class="px-4 py-3">SCFace<br>d₁</th>
+            <th class="px-4 py-3">SCFace<br>d₃</th>
+            <th class="px-4 py-3">SurvFace<br>TPIR@0.01</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr class="hover:bg-slate-50"><td class="px-4 py-2.5 font-medium text-slate-700">ArcFace</td><td class="px-4 py-2.5 text-center text-slate-600">55.58%</td><td class="px-4 py-2.5 text-center text-slate-600">51.10%</td><td class="px-4 py-2.5 text-center text-red-500 font-bold">41.75%</td><td class="px-4 py-2.5 text-center text-slate-600">97.20%</td><td class="px-4 py-2.5 text-center text-red-500 font-bold">1.12%</td></tr>
+          <tr class="bg-blue-50 hover:bg-blue-100"><td class="px-4 py-2.5 font-bold text-blue-700">ArcFace + UCFace ⭐</td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">74.02%</td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">68.59%</td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">87.00% <span class="text-xs bg-emerald-100 text-emerald-700 rounded px-1">+45pp</span></td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">98.75%</td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">15.22% <span class="text-xs bg-emerald-100 text-emerald-700 rounded px-1">×13.6</span></td></tr>
+          <tr class="hover:bg-slate-50"><td class="px-4 py-2.5 font-medium text-slate-700">CosFace</td><td class="px-4 py-2.5 text-center text-slate-600">73.16%</td><td class="px-4 py-2.5 text-center text-slate-600">67.05%</td><td class="px-4 py-2.5 text-center text-slate-600">83.30%</td><td class="px-4 py-2.5 text-center text-slate-600">97.00%</td><td class="px-4 py-2.5 text-center text-slate-600">13.15%</td></tr>
+          <tr class="bg-blue-50 hover:bg-blue-100"><td class="px-4 py-2.5 font-bold text-blue-700">CosFace + UCFace ⭐</td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">73.49%</td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">67.98%</td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">85.55%</td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">97.45%</td><td class="px-4 py-2.5 text-center text-blue-700 font-bold">14.42%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- VISUAL: Main results bar chart -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm mb-6 not-prose">
+    <h4 class="font-bold text-slate-700 text-base mb-1 text-center">Performance Leap on Distant Surveillance (SCFace d₁)</h4>
+    <p class="text-xs text-slate-500 text-center mb-4">Rank-1 Identification Rate — MobileFaceNet backbone</p>
+    <div class="chart-wrap"><canvas id="resultsChart"></canvas></div>
+  </div>
+
+  <!-- VISUAL: SurvFace TPIR comparison -->
+  <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm mb-6 not-prose">
+    <h4 class="font-bold text-slate-700 text-base mb-1 text-center">TPIR @ FPIR=0.01 — QMUL-SurvFace Comparison</h4>
+    <p class="text-xs text-slate-500 text-center mb-4">Includes PFE and DUL uncertainty baselines</p>
+    <div class="chart-wrap"><canvas id="survChart"></canvas></div>
+  </div>
+
+  <p>The data reveals a staggering leap in performance when UCFace is engaged. The most dramatic evidence lies in the SCFace d₁ test set. The baseline ArcFace model, when faced with these highly uncertain, distant surveillance images, suffered a near-total collapse, achieving a Rank-1 identification rate of only 41.75%. By bolting the UCFace module onto the exact same ArcFace architecture, the model's performance more than doubled, skyrocketing to an 87.00% identification rate.</p>
+  <p>This massive delta perfectly validates the core hypothesis of the paper. Standard contrastive models collapse when forced to learn from highly uncertain, blurry images because they push and pull blindly, memorizing random background noise to force false separation. By converting the anchor to a vMF distribution where κ shrinks for blurry images, UCFace forces the model to ignore the noise. The model relaxes the structural penalties, forgives the blurriness, and preserves the absolute integrity of the hyperspherical embedding space, leading to massive gains in real-world accuracy.</p>
+  <p>Furthermore, on the brutal QMUL-SurvFace benchmark measuring TPIR @ FPIR=0.01, the baseline ArcFace Hit Rate was a catastrophic 1.12%. With UCFace, the Hit Rate multiplied by a factor of 13, reaching 15.22%. While 15% may seem low in an absolute sense, achieving this Hit Rate while successfully suppressing false alarms to a mere 1% on highly degraded CCTV footage represents a monumental leap in forensic capability.</p>
+  <p>Similar margins of improvement were observed using the heavier, more powerful ResNet-50 backbone, confirming that the benefits of UCFace scale linearly with larger network architectures.</p>
+
+  <h3>Addressing the Open-Set Discrepancy</h3>
+  <p>To definitively prove that UCFace has mastered open-set environments, the authors mathematically analyzed the internal geometry of the hypersphere using two deeper metrics: Intra-Class Compactness and Prototype Affinity.</p>
+  <p>Intra-Class Compactness measures the degree to which completely novel, unseen test images of the exact same person naturally cluster tightly together in the hypersphere without any human intervention. The analysis proved that UCFace models exhibit vastly superior intra-class compactness compared to traditional baselines.</p>
+  <p>Prototype Affinity measures a dangerous behavior: how strongly the system attempts to force a completely unknown stranger's face into the geometric territory currently occupied by a known training identity. A high affinity means the system is desperate to classify strangers as known people, guaranteeing massive False Positive alarms. The analysis revealed that UCFace models possess significantly lower prototype affinity than standard models.</p>
+  <p>Together, these two metrics prove a fundamental shift in the network's cognition. UCFace has successfully generalized the universal concept of human facial geometry. Rather than merely memorizing the exact faces it was trained on, it learned how to map a face. Consequently, when presented with a complete stranger, the system confidently isolates them in a unique, highly compact region of the hypersphere, flatly refusing to misclassify them as a known entity.</p>
+
+  <!-- VISUAL: Open-set metrics visual -->
+  <div class="grid md:grid-cols-2 gap-5 my-6 not-prose">
+    <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+      <h4 class="font-bold text-slate-700 mb-3 text-sm">📊 Intra-Class Compactness</h4>
+      <p class="text-xs text-slate-500 mb-3">How tightly same-identity embeddings cluster together (Higher = Better)</p>
+      <div class="space-y-2">
+        <div><div class="flex justify-between text-xs mb-1"><span class="font-semibold text-slate-600">ArcFace (Baseline)</span><span class="text-slate-500">~0.58</span></div><div class="h-4 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-slate-400 rounded-full" style="width:58%"></div></div></div>
+        <div><div class="flex justify-between text-xs mb-1"><span class="font-bold text-blue-600">ArcFace + UCFace ⭐</span><span class="text-blue-600 font-bold">~0.82</span></div><div class="h-4 bg-blue-50 rounded-full overflow-hidden"><div class="h-full bg-blue-500 rounded-full" style="width:82%"></div></div></div>
+      </div>
+      <p class="text-xs text-emerald-600 font-semibold mt-3">✓ UCFace clusters identities more tightly → better generalization to unseen faces</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+      <h4 class="font-bold text-slate-700 mb-3 text-sm">⚠️ Prototype Affinity (Lower = Better)</h4>
+      <p class="text-xs text-slate-500 mb-3">How strongly the model tries to force strangers into known identity territories</p>
+      <div class="space-y-2">
+        <div><div class="flex justify-between text-xs mb-1"><span class="font-semibold text-slate-600">ArcFace (Baseline)</span><span class="text-red-500">~0.74 (DANGER)</span></div><div class="h-4 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-red-400 rounded-full" style="width:74%"></div></div></div>
+        <div><div class="flex justify-between text-xs mb-1"><span class="font-bold text-blue-600">ArcFace + UCFace ⭐</span><span class="text-emerald-600 font-bold">~0.41 (SAFE)</span></div><div class="h-4 bg-blue-50 rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width:41%"></div></div></div>
+      </div>
+      <p class="text-xs text-emerald-600 font-semibold mt-3">✓ UCFace refuses to force-match strangers → far fewer false positives</p>
+    </div>
+  </div>
+
+  <h3>Comparing Alternative Uncertainty Models</h3>
+  <p>The researchers also benchmarked UCFace against earlier, competing uncertainty models, specifically PFE (Probabilistic Face Embeddings) and DUL (Data Uncertainty Learning).</p>
+  <p>While PFE and DUL both attempt to model uncertainty, they rely on complex optimization processes to calculate variance, without possessing a concrete mathematical anchor linking their uncertainty to objective reality. UCFace outperforms both models across all degraded datasets. This victory is attributed directly to UCFace's brilliant decision to use the raw feature norm as an immutable, physically grounded proxy for image quality, ensuring the model's uncertainty estimations are always perfectly aligned with the actual visual degradation of the image.</p>
+
+  <!-- VISUAL: Accordion comparison of uncertainty methods -->
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm my-6 not-prose overflow-hidden">
+    <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 font-bold text-sm text-slate-600">🔬 Comparing Uncertainty-Based Methods</div>
+    <div class="divide-y divide-slate-100">
+      <div class="p-4">
+        <button class="accordion-btn w-full text-left flex justify-between items-center" onclick="toggleAccordion(this)">
+          <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-bold text-xs">PFE</span><span class="font-semibold text-slate-700">Probabilistic Face Embeddings (PFE)</span></div>
+          <span class="accordion-icon text-slate-400 text-lg">▼</span>
+        </button>
+        <div class="accordion-body text-sm text-slate-600 leading-relaxed">
+          <p>PFE models the uncertainty of a face image as a Gaussian distribution. Uses a fixed pre-learned representation vector as the mean μ while learning uncertainty through standard deviation σ. <strong>Drawback:</strong> μ cannot be jointly learned with σ. Also inherits the open-set discrepancy challenge. Gaussian distribution is not native to the hypersphere.</p>
+          <div class="mt-2 flex gap-2 flex-wrap"><span class="text-xs bg-amber-100 text-amber-700 rounded px-2 py-0.5">SCFace d₁: 83.60%</span><span class="text-xs bg-amber-100 text-amber-700 rounded px-2 py-0.5">SurvFace: 12.61%</span></div>
+        </div>
+      </div>
+      <div class="p-4">
+        <button class="accordion-btn w-full text-left flex justify-between items-center" onclick="toggleAccordion(this)">
+          <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-bold text-xs">DUL</span><span class="font-semibold text-slate-700">Data Uncertainty Learning (DUL)</span></div>
+          <span class="accordion-icon text-slate-400 text-lg">▼</span>
+        </button>
+        <div class="accordion-body text-sm text-slate-600 leading-relaxed">
+          <p>DUL learns both μ and σ simultaneously within the same network via reparameterization trick: r* = μ + ε·σ where ε ~ N(0, I). Uses KL divergence regularization. <strong>Drawback:</strong> No explicit link between uncertainty and image quality — cannot distinguish Type 1 vs Type 2 hard samples in early training.</p>
+          <div class="mt-2 flex gap-2 flex-wrap"><span class="text-xs bg-amber-100 text-amber-700 rounded px-2 py-0.5">SCFace d₁: 84.00%</span><span class="text-xs bg-amber-100 text-amber-700 rounded px-2 py-0.5">SurvFace: 14.55%</span></div>
+        </div>
+      </div>
+      <div class="p-4 bg-blue-50">
+        <button class="accordion-btn w-full text-left flex justify-between items-center" onclick="toggleAccordion(this)">
+          <div class="flex items-center gap-3"><span class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xs">UC</span><span class="font-bold text-blue-700">UCFace (Ours) ⭐</span></div>
+          <span class="accordion-icon text-slate-400 text-lg">▼</span>
+        </button>
+        <div class="accordion-body text-sm text-blue-800 leading-relaxed">
+          <p>Uses feature norm ‖z‖ — a built-in, physically grounded proxy for image quality — as κ in the vMF distribution. No extra parameters needed. Explicit, verifiable link between uncertainty and image quality. Outperforms PFE and DUL on all degraded datasets.</p>
+          <div class="mt-2 flex gap-2 flex-wrap"><span class="text-xs bg-emerald-100 text-emerald-700 rounded px-2 py-0.5 font-bold">SCFace d₁: 87.00% ✓</span><span class="text-xs bg-emerald-100 text-emerald-700 rounded px-2 py-0.5 font-bold">SurvFace: 15.22% ✓</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ SECTION 12 ════════════ -->
+<section id="conclusion" class="mb-12 scroll-mt-12">
+  <div class="sec-badge bg-slate-100 text-slate-600 mb-3">Section 12</div>
+  <h2 class="text-3xl font-bold mb-6 border-b-2 border-slate-200 pb-3" style="font-family:Syne,sans-serif;">Advantages &amp; Limitations</h2>
+
+  <h3>Advantages and Limitations</h3>
+  <p>The integration of von Mises-Fisher directional statistics into the supervised contrastive learning framework establishes a formidable new vanguard in biometric artificial intelligence. However, the architectural design carries inherent engineering trade-offs that must be evaluated.</p>
+
+  <div class="grid md:grid-cols-2 gap-6 my-8 not-prose">
+    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-6 shadow-sm">
+      <h4 class="font-bold text-emerald-700 text-base mb-4 flex items-center gap-2">⭐ Core Advantages</h4>
+      <div class="space-y-4">
+        <div class="flex items-start gap-3">
+          <span class="w-5 h-5 bg-emerald-200 rounded-full flex items-center justify-center text-emerald-700 font-bold text-xs flex-shrink-0 mt-0.5">✓</span>
+          <div><div class="font-semibold text-emerald-800 text-sm mb-1">Noise Immunity without Architectural Bloat</div><p class="text-xs text-emerald-900 leading-relaxed">The most profound advantage of UCFace is its operational elegance. Competing uncertainty models, such as PFE and DUL, mandate the construction of entirely separate, highly complex neural network branches dedicated solely to predicting variance and standard deviations. This drastically increases computational overhead and training times. UCFace brilliantly bypasses this entire requirement by weaponizing the raw feature norm—a numerical byproduct that already exists natively within the standard network architecture. UCFace achieves superior uncertainty quantification at virtually zero additional computational cost.</p></div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="w-5 h-5 bg-emerald-200 rounded-full flex items-center justify-center text-emerald-700 font-bold text-xs flex-shrink-0 mt-0.5">✓</span>
+          <div><div class="font-semibold text-emerald-800 text-sm mb-1">Dynamic Curriculum Learning</div><p class="text-xs text-emerald-900 leading-relaxed">By automatically regulating the "tug-of-war" push and pull forces based on image quality, UCFace acts as an autonomous curriculum optimizer. It extracts aggressive, highly discriminative separation boundaries from pristine, high-resolution images, while gracefully treating blurry, degraded images with mathematical leniency. This prevents the catastrophic overfitting that plagues traditional metric learning systems.</p></div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="w-5 h-5 bg-emerald-200 rounded-full flex items-center justify-center text-emerald-700 font-bold text-xs flex-shrink-0 mt-0.5">✓</span>
+          <div><div class="font-semibold text-emerald-800 text-sm mb-1">Modular Plug-and-Play Compatibility</div><p class="text-xs text-emerald-900 leading-relaxed">The UCFace framework is not an isolated, monolithic neural network; it is designed purely as a modular add-on loss function (𝓛_U). It can be seamlessly retrofitted onto virtually any existing state-of-the-art angular margin classifier (CosFace, ArcFace, AdaFace) to instantly upgrade its open-set robustness without requiring a fundamental redesign of the core system.</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="bg-orange-50 border border-orange-200 rounded-xl p-6 shadow-sm">
+      <h4 class="font-bold text-orange-700 text-base mb-4 flex items-center gap-2">⚠️ Inherent Limitations</h4>
+      <div class="space-y-4">
+        <div class="flex items-start gap-3">
+          <span class="w-5 h-5 bg-orange-200 rounded-full flex items-center justify-center text-orange-700 font-bold text-xs flex-shrink-0 mt-0.5">!</span>
+          <div><div class="font-semibold text-orange-800 text-sm mb-1">Vulnerability to Symmetrical Outliers</div><p class="text-xs text-orange-900 leading-relaxed">A defining characteristic of the von Mises-Fisher distribution is its assumption of symmetrical geometric dispersion. The probability spotlight spreads evenly in all directions away from the mean. If a dataset is contaminated with extreme, asymmetrical outliers—such as severely mislabeled data points or faces deliberately obscured by hostile adversarial artifacts—the vMF mean direction can be violently skewed, poisoning the geometric space. The authors note that surviving highly targeted data poisoning might require abandoning the vMF distribution in favor of heavier-tailed distributions, such as the spherical t-distribution, which are inherently more resilient to extreme anomalies.</p></div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="w-5 h-5 bg-orange-200 rounded-full flex items-center justify-center text-orange-700 font-bold text-xs flex-shrink-0 mt-0.5">!</span>
+          <div><div class="font-semibold text-orange-800 text-sm mb-1">Computational Constraints in Probabilistic Sampling</div><p class="text-xs text-orange-900 leading-relaxed">While UCFace represents a leap forward, it remains a hybrid system. To maintain computational stability, UCFace only treats the anchor image as a probability distribution, while treating the positive and negative samples as rigid, deterministic points. In a perfect, purely probabilistic framework, every single image in the batch would be modeled as an interacting distribution. However, calculating the geometric overlap between hundreds of distinct distributions on a high-dimensional hypersphere requires continuous mathematical sampling, involving intractable normalization constants that trigger severe gradient instability and structural collapse during the backpropagation phase of training. Restricting the probability distribution strictly to the anchor represents a necessary engineering compromise to ensure the model actually converges.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Conclusion</h3>
+  <p>The Uncertainty-Aware Face Embedding With Contrastive Learning (UCFace) architecture represents a pivotal maturation in the deployment of facial recognition technology. For years, the field has been paralyzed by the open-set domain discrepancy, where models trained to memorize known identities completely fracture when confronted by the unpredictable, degraded nature of real-world surveillance imagery.</p>
+  <p>By abandoning the illusion of absolute geometric certainty and embracing the probabilistic, chaotic reality of unconstrained computer vision, the UCFace framework elegantly neutralizes this vulnerability. The decision to fuse the physical reality of the feature norm with the directional statistics of the von Mises-Fisher distribution allows the model to dynamically regulate its own learning process. It enforces massive spatial boundaries when confidence is high, and extends mathematical forgiveness when confidence is low.</p>
+  <p>The resulting harmony between hyperspherical embedding, dynamic image quality assessment, and supervised contrastive metric learning yields facial embeddings that are profoundly resilient to noise. By aggressively minimizing the misclassification of unknown identities while successfully linking heavily degraded facial signatures across massive distances, the UCFace architecture provides a highly stable, mathematically rigorous foundation for the next generation of mission-critical, open-set biometric identification systems.</p>
+
+  <!-- Summary cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-8 not-prose">
+    <div class="bg-blue-600 text-white rounded-xl p-5 shadow-lg">
+      <div class="text-2xl mb-2">🔵</div>
+      <div class="font-bold mb-2">Core Innovation</div>
+      <p class="text-sm text-blue-100 leading-relaxed">Treating anchor embeddings as vMF probability distributions with κ = ‖z‖ as a zero-cost, physically grounded uncertainty signal.</p>
+    </div>
+    <div class="bg-emerald-600 text-white rounded-xl p-5 shadow-lg">
+      <div class="text-2xl mb-2">📈</div>
+      <div class="font-bold mb-2">Key Result</div>
+      <p class="text-sm text-emerald-100 leading-relaxed">ArcFace + UCFace on SCFace d₁: 41.75% → 87.00% (+45pp). SurvFace TPIR@0.01: 1.12% → 15.22% (×13.6).</p>
+    </div>
+    <div class="bg-violet-600 text-white rounded-xl p-5 shadow-lg">
+      <div class="text-2xl mb-2">🔮</div>
+      <div class="font-bold mb-2">Future Directions</div>
+      <p class="text-sm text-violet-100 leading-relaxed">Replace vMF with spherical t-distribution for outlier robustness. Model all samples (not just anchors) as probability distributions.</p>
+    </div>
+  </div>
+</section>
+
+</div><!-- end container -->
+</main>
+
+<!-- ══════ JAVASCRIPT ══════ -->
+<script>
+// ── NAV ACTIVE + PROGRESS ──
+const sections = document.querySelectorAll('section');
+const navLinks = document.querySelectorAll('.nav-link');
+const mc = document.getElementById('main-content');
+mc.addEventListener('scroll', () => {
+  let cur = '';
+  sections.forEach(s => { if (mc.scrollTop >= s.offsetTop - 180) cur = s.id; });
+  navLinks.forEach(l => {
+    l.classList.remove('active');
+    if (l.getAttribute('href').substring(1) === cur) l.classList.add('active');
+  });
+  const pct = Math.round((mc.scrollTop / (mc.scrollHeight - mc.clientHeight)) * 100);
+  document.getElementById('read-bar').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = pct + '%';
+});
+
+// ── MATH TERM TOOLTIPS ──
+const tooltip = document.getElementById('tooltip');
+document.querySelectorAll('.math-term').forEach(el => {
+  el.addEventListener('mouseenter', (e) => {
+    tooltip.textContent = el.dataset.def;
+    tooltip.style.opacity = '1';
+    tooltip.style.left = e.pageX - mc.offsetLeft + 'px';
+    tooltip.style.top = (e.pageY + 12) + 'px';
+  });
+  el.addEventListener('mousemove', (e) => {
+    tooltip.style.left = (e.clientX - mc.getBoundingClientRect().left + 10) + 'px';
+    tooltip.style.top = (e.clientY - mc.getBoundingClientRect().top + 16) + 'px';
+  });
+  el.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
+});
+
+// ── PIPELINE INFO ──
+function showPipeInfo(el) {
+  const box = document.getElementById('pipe-info');
+  document.getElementById('pipe-info-text').textContent = el.dataset.info;
+  box.classList.remove('hidden');
+  document.querySelectorAll('.pipe-node .node-box').forEach(b => b.classList.remove('ring-2','ring-blue-400'));
+  el.querySelector('.node-box').classList.add('ring-2','ring-blue-400');
+}
+
+// ── HYPERSPHERE CANVAS ──
+(function(){
+  const canvas = document.getElementById('hypersphere-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let rotX = 0.3, rotY = 0.5, dragging = false, lastX, lastY;
+  const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#e879f9'];
+  let points = [];
+
+  function genPoints(nIds, spread) {
+    points = [];
+    for (let id = 0; id < nIds; id++) {
+      const cx = (Math.random()-0.5)*2, cy = (Math.random()-0.5)*2, cz = (Math.random()-0.5)*2;
+      const cl = Math.sqrt(cx*cx+cy*cy+cz*cz);
+      for (let j = 0; j < 12; j++) {
+        let x = cx/cl + (Math.random()-0.5)*spread;
+        let y = cy/cl + (Math.random()-0.5)*spread;
+        let z = cz/cl + (Math.random()-0.5)*spread;
+        const l = Math.sqrt(x*x+y*y+z*z);
+        points.push({x:x/l, y:y/l, z:z/l, id, color:COLORS[id%COLORS.length]});
+      }
+    }
+  }
+  genPoints(5, 0.3);
+
+  function project(x, y, z) {
+    const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+    const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+    let ny = y*cosX - z*sinX, nz = y*sinX + z*cosX;
+    let nx = x*cosY + nz*sinY; nz = -x*sinY + nz*cosY;
+    const scale = 110 / (3 - nz); return {sx: nx*scale+140, sy: ny*scale+140, depth: nz};
+  }
+
+  function draw() {
+    ctx.clearRect(0,0,280,280);
+    // sphere outline
+    ctx.beginPath(); ctx.arc(140,140,115,0,Math.PI*2);
+    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(140,140,115,0,Math.PI*2);
+    const grad = ctx.createRadialGradient(130,130,20,140,140,115);
+    grad.addColorStop(0,'rgba(30,41,59,0.6)'); grad.addColorStop(1,'rgba(15,23,42,0.9)');
+    ctx.fillStyle=grad; ctx.fill();
+    // equator
+    for (let a=0; a<Math.PI*2; a+=0.05) {
+      const p = project(Math.cos(a),0,Math.sin(a));
+      ctx.beginPath(); ctx.arc(p.sx,p.sy,0.8,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fill();
+    }
+    // sort by depth
+    const sorted = [...points].sort((a,b) => project(a.x,a.y,a.z).depth - project(b.x,b.y,b.z).depth);
+    sorted.forEach(p => {
+      const {sx,sy,depth} = project(p.x,p.y,p.z);
+      const alpha = (depth+1)/2; const r = 4+alpha*3;
+      ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2);
+      ctx.fillStyle = p.color + Math.floor(alpha*200+55).toString(16).padStart(2,'0');
+      ctx.fill();
+    });
+    rotY += 0.004; if (!dragging) requestAnimationFrame(draw);
+  }
+  draw();
+  canvas.addEventListener('mousedown', e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;});
+  window.addEventListener('mousemove', e=>{ if(!dragging) return; rotY+=(e.clientX-lastX)*0.01; rotX+=(e.clientY-lastY)*0.01; lastX=e.clientX;lastY=e.clientY; ctx.clearRect(0,0,280,280); draw(); });
+  window.addEventListener('mouseup', ()=>{ if(dragging){dragging=false;draw();} });
+  document.getElementById('id-count').addEventListener('input', function(){ document.getElementById('id-count-val').textContent=this.value; genPoints(+this.value,+document.getElementById('spread').value); });
+  document.getElementById('spread').addEventListener('input', function(){
+    const v=+this.value; document.getElementById('spread-val').textContent=v.toFixed(2);
+    document.getElementById('intra-disp').textContent=v<0.3?'LOW':v<0.6?'MED':'HIGH';
+    document.getElementById('inter-disp').textContent=v<0.4?'HIGH':v<0.7?'MED':'LOW';
+    genPoints(+document.getElementById('id-count').value,v);
+  });
+})();
+
+// ── COSINE DEMO CANVAS ──
+(function(){
+  const canvas = document.getElementById('cosine-demo');
+  const ctx = canvas.getContext('2d');
+  const slider = document.getElementById('angle-slider');
+  function draw(angle) {
+    const rad = angle * Math.PI / 180;
+    ctx.clearRect(0,0,240,240);
+    const cx=120, cy=120, r=90;
+    // circle
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=2; ctx.stroke();
+    // vector 1 (fixed, pointing right-up)
+    const a1 = -Math.PI/4;
+    const v1x = Math.cos(a1), v1y = Math.sin(a1);
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+r*v1x, cy+r*v1y);
+    ctx.strokeStyle='#2563eb'; ctx.lineWidth=3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx+r*v1x,cy+r*v1y,6,0,Math.PI*2); ctx.fillStyle='#2563eb'; ctx.fill();
+    // vector 2 (rotated by angle)
+    const a2 = a1 + rad;
+    const v2x = Math.cos(a2), v2y = Math.sin(a2);
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+r*v2x, cy+r*v2y);
+    ctx.strokeStyle='#ef4444'; ctx.lineWidth=3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx+r*v2x,cy+r*v2y,6,0,Math.PI*2); ctx.fillStyle='#ef4444'; ctx.fill();
+    // arc for angle
+    if (angle > 2) {
+      ctx.beginPath(); ctx.arc(cx,cy,30,a1,a2);
+      ctx.strokeStyle='#f59e0b'; ctx.lineWidth=2; ctx.stroke();
+    }
+    // labels
+    ctx.font='11px Inter'; ctx.fillStyle='#2563eb'; ctx.fillText('Embedding A',cx+r*v1x+8,cy+r*v1y);
+    ctx.fillStyle='#ef4444'; ctx.fillText('Embedding B',cx+r*v2x+8,cy+r*v2y+12);
+    const cosv = Math.cos(rad);
+    const card = document.getElementById('cos-card');
+    document.getElementById('cos-val').textContent = cosv.toFixed(2);
+    if (cosv > 0.7) { card.style.background='#eff6ff'; card.style.borderColor='#2563eb'; document.getElementById('cos-val').style.color='#2563eb'; }
+    else if (cosv > 0.0) { card.style.background='#fefce8'; card.style.borderColor='#f59e0b'; document.getElementById('cos-val').style.color='#d97706'; }
+    else { card.style.background='#fef2f2'; card.style.borderColor='#ef4444'; document.getElementById('cos-val').style.color='#dc2626'; }
+    const lbl = document.getElementById('identity-label');
+    if (cosv > 0.8) lbl.innerHTML='<span style="color:#059669">Same Person ✓</span>';
+    else if (cosv > 0.3) lbl.innerHTML='<span style="color:#d97706">Possibly Same ≈</span>';
+    else lbl.innerHTML='<span style="color:#dc2626">Different Person ✗</span>';
+  }
+  slider.addEventListener('input', function(){
+    document.getElementById('angle-label').textContent=this.value+'°';
+    draw(+this.value);
+  });
+  draw(0);
+})();
+
+// ── INTRA/INTER TRAINING SIMULATION ──
+let trainInterval = null;
+function simulateTraining() {
+  clearInterval(trainInterval); let step = 0;
+  const stages = [{intra:70,inter:40,msg:"Epoch 1: Baseline — poor separation"},{intra:55,inter:55,msg:"Epoch 5: Learning identity features..."},{intra:35,inter:70,msg:"Epoch 15: UCFace tightening clusters..."},{intra:15,inter:88,msg:"Epoch 30: Excellent separation achieved! ✓"}];
+  trainInterval = setInterval(() => {
+    if (step >= stages.length) { clearInterval(trainInterval); return; }
+    const s = stages[step++];
+    document.getElementById('intra-bar').style.width = s.intra + '%';
+    document.getElementById('inter-bar').style.width = s.inter + '%';
+    document.getElementById('training-status').textContent = s.msg;
+  }, 1200);
+}
+function resetTraining() { clearInterval(trainInterval); document.getElementById('intra-bar').style.width='70%'; document.getElementById('inter-bar').style.width='40%'; document.getElementById('training-status').textContent='Click to watch how UCFace optimizes both distances simultaneously.'; }
+
+// ── TUG OF WAR CANVAS ──
+let towAnim = null, towRunning = false;
+let towParticles = [];
+function initTowParticles() {
+  towParticles = [];
+  const cx=280, cy=150;
+  // anchor (blue, center)
+  towParticles.push({x:cx,y:cy,vx:0,vy:0,type:'anchor',color:'#2563eb',r:16});
+  // positive (green)
+  towParticles.push({x:cx-80+Math.random()*60,y:cy-40+Math.random()*80,vx:0,vy:0,type:'positive',color:'#10b981',r:12});
+  // negatives (red)
+  for(let i=0;i<5;i++) towParticles.push({x:cx-200+Math.random()*400,y:cy-100+Math.random()*200,vx:0,vy:0,type:'negative',color:'#ef4444',r:10});
+}
+function drawTow() {
+  const canvas=document.getElementById('tugofwar-canvas'); if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,560,300);
+  // bg
+  ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,560,300);
+  // label
+  ctx.font='11px Inter'; ctx.fillStyle='#94a3b8'; ctx.fillText('Embedding Space (Hypersphere projection)',10,18);
+  towParticles.forEach(p => {
+    // draw force lines
+    if (p.type !== 'anchor') {
+      const anchor = towParticles[0];
+      ctx.beginPath(); ctx.moveTo(anchor.x,anchor.y); ctx.lineTo(p.x,p.y);
+      ctx.strokeStyle = p.type==='positive'?'rgba(16,185,129,0.25)':'rgba(239,68,68,0.15)';
+      ctx.lineWidth=1; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=p.color; ctx.globalAlpha=0.85; ctx.fill(); ctx.globalAlpha=1;
+    ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.stroke();
+    const label = p.type==='anchor'?'Anchor':p.type==='positive'?'Pos':'Neg';
+    ctx.font='bold 9px Inter'; ctx.fillStyle='white'; ctx.textAlign='center';
+    ctx.fillText(label,p.x,p.y+3); ctx.textAlign='left';
+  });
+}
+function startTugOfWar() {
+  if (towRunning) return; towRunning=true;
+  initTowParticles();
+  let frame=0;
+  towAnim=setInterval(()=>{
+    const anchor=towParticles[0];
+    towParticles.forEach((p,i)=>{ if(i===0) return;
+      const dx=anchor.x-p.x, dy=anchor.y-p.y, dist=Math.sqrt(dx*dx+dy*dy)||1;
+      if(p.type==='positive'){ p.vx+=dx/dist*0.8; p.vy+=dy/dist*0.8; }
+      else { p.vx-=dx/dist*1.2; p.vy-=dy/dist*1.2; }
+      p.vx*=0.9; p.vy*=0.9; p.x+=p.vx; p.y+=p.vy;
+      p.x=Math.max(p.r,Math.min(560-p.r,p.x)); p.y=Math.max(p.r,Math.min(300-p.r,p.y));
+    });
+    drawTow(); frame++;
+    if(frame>120){clearInterval(towAnim);towRunning=false;}
+  },30);
+}
+function resetTugOfWar(){clearInterval(towAnim);towRunning=false;initTowParticles();drawTow();}
+initTowParticles(); drawTow();
+
+// ── TEMPERATURE CHART ──
+(function(){
+  const ctx=document.getElementById('temp-chart').getContext('2d');
+  let chart;
+  function buildData(tau){
+    const sims=[-0.9,-0.5,-0.2,0,0.2,0.5,0.8,0.9,1.0];
+    return sims.map(s=>Math.exp(s/tau)/sims.map(x=>Math.exp(x/tau)).reduce((a,b)=>a+b,0));
+  }
+  function makeChart(tau){
+    if(chart) chart.destroy();
+    const sims=['−0.9','−0.5','−0.2','0','0.2','0.5','0.8','0.9','1.0(+)'];
+    chart=new Chart(ctx,{type:'bar',data:{labels:sims,datasets:[{label:'Probability',data:buildData(tau),backgroundColor:sims.map((_,i)=>i===8?'rgba(16,185,129,0.7)':i>=5?'rgba(239,68,68,0.5)':'rgba(37,99,235,0.4)'),borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Cosine Similarity Score'}},y:{beginAtZero:true,title:{display:true,text:'Probability Weight'}}}}});
+  }
+  const sl=document.getElementById('temp-slider');
+  sl.addEventListener('input',function(){
+    const tau=this.value/10;
+    document.getElementById('temp-val').textContent=tau.toFixed(1);
+    makeChart(tau);
+    const desc=document.getElementById('temp-desc');
+    if(tau<0.4){desc.style.background='#fef2f2';desc.style.borderColor='#fecaca';desc.style.color='#991b1b';desc.textContent='⚠️ Too sharp! Massive penalties on all negatives — risk of geometric instability.';}
+    else if(tau<1.2){desc.style.background='#eff6ff';desc.style.borderColor='#bfdbfe';desc.style.color='#1d4ed8';desc.textContent='✓ Optimal range! τ=0.8 provides best balance — strong penalties on true hard negatives.';}
+    else{desc.style.background='#f0fdf4';desc.style.borderColor='#bbf7d0';desc.style.color='#166534';desc.textContent='⚠️ Too soft! Model becomes too tolerant of nearby negatives — poor discrimination.';}
+  });
+  makeChart(0.8);
+})();
+
+// ── COLLAPSE / UNIFORM CANVASES ──
+(function(){
+  function drawCollapsed(){
+    const canvas=document.getElementById('collapse-canvas'); if(!canvas) return;
+    const ctx=canvas.getContext('2d');
+    ctx.clearRect(0,0,160,160);
+    ctx.beginPath(); ctx.arc(80,80,75,0,Math.PI*2); ctx.strokeStyle='#fca5a5'; ctx.lineWidth=1.5; ctx.stroke();
+    for(let i=0;i<80;i++){
+      const a=-0.8+Math.random()*1.2, r=65+Math.random()*10;
+      ctx.beginPath(); ctx.arc(80+r*Math.cos(a),80+r*Math.sin(a),3,0,Math.PI*2);
+      ctx.fillStyle='rgba(239,68,68,0.7)'; ctx.fill();
+    }
+    ctx.font='bold 10px Inter'; ctx.fillStyle='#ef4444'; ctx.textAlign='center'; ctx.fillText('All points in one cone',80,150);
+  }
+  function drawUniform(){
+    const canvas=document.getElementById('uniform-canvas'); if(!canvas) return;
+    const ctx=canvas.getContext('2d');
+    ctx.clearRect(0,0,160,160);
+    ctx.beginPath(); ctx.arc(80,80,75,0,Math.PI*2); ctx.strokeStyle='#86efac'; ctx.lineWidth=1.5; ctx.stroke();
+    for(let i=0;i<80;i++){
+      const a=Math.random()*Math.PI*2, r=70+Math.random()*8;
+      ctx.beginPath(); ctx.arc(80+r*Math.cos(a),80+r*Math.sin(a),3,0,Math.PI*2);
+      ctx.fillStyle='rgba(16,185,129,0.7)'; ctx.fill();
+    }
+    ctx.font='bold 10px Inter'; ctx.fillStyle='#059669'; ctx.textAlign='center'; ctx.fillText('Scattered uniformly',80,150);
+  }
+  drawCollapsed(); drawUniform();
+})();
+
+// ── FEATURE NORM QUALITY SLIDER ──
+(function(){
+  const sl=document.getElementById('quality-slider');
+  sl.addEventListener('input',function(){
+    const q=+this.value;
+    const emojis=['😵','😵‍💫','😶‍🌫️','😑','😐','🙂','😊','😁','😄','🤩'];
+    document.getElementById('face-emoji').textContent=emojis[Math.floor(q/11)];
+    document.getElementById('quality-label').textContent=q>70?'High Quality':q>40?'Medium Quality':'Low Quality';
+    document.getElementById('quality-desc').textContent=q>70?'Sharp, well-lit':q>40?'Some blur/noise':'Heavy blur/noise';
+    document.getElementById('norm-display').textContent=q;
+    document.getElementById('norm-bar').style.width=q+'%';
+    const unc = 100-q;
+    const uc=document.getElementById('uncertainty-display');
+    if(q>70){uc.textContent='LOW';uc.style.color='#22c55e';document.getElementById('uncertainty-card').style.background='#f0fdf4';document.getElementById('uncertainty-card').style.borderColor='#bbf7d0';document.getElementById('uncertainty-desc').textContent='Sharp vMF spotlight → aggressive learning';}
+    else if(q>40){uc.textContent='MED';uc.style.color='#f59e0b';document.getElementById('uncertainty-card').style.background='#fffbeb';document.getElementById('uncertainty-card').style.borderColor='#fde68a';document.getElementById('uncertainty-desc').textContent='Moderate vMF spread → balanced learning';}
+    else{uc.textContent='HIGH';uc.style.color='#ef4444';document.getElementById('uncertainty-card').style.background='#fef2f2';document.getElementById('uncertainty-card').style.borderColor='#fecaca';document.getElementById('uncertainty-desc').textContent='Diffuse cloud → gentle, forgiving learning';}
+    document.getElementById('face-quality-card').style.background=q>70?'#eff6ff':q>40?'#fffbeb':'#fef2f2';
+    document.getElementById('face-quality-card').style.borderColor=q>70?'#bfdbfe':q>40?'#fde68a':'#fecaca';
+  });
+})();
+
+// ── VMF CANVAS (Flashlight) ──
+(function(){
+  const canvas=document.getElementById('vmf-canvas'); if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  function draw(kappa){
+    ctx.clearRect(0,0,220,220);
+    const cx=110,cy=110,r=100;
+    // dark sphere
+    const bg=ctx.createRadialGradient(cx-20,cy-20,5,cx,cy,r);
+    bg.addColorStop(0,'#1e293b'); bg.addColorStop(1,'#0f172a');
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle=bg; ctx.fill();
+    // grid lines
+    for(let a=0;a<Math.PI*2;a+=0.3){
+      ctx.beginPath(); ctx.arc(cx+r*0.95*Math.cos(a),cy+r*0.95*Math.sin(a),0.8,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fill();
+    }
+    // spotlight (top of sphere = mu direction)
+    const spread = Math.max(5, 90/(kappa+1));
+    const grd=ctx.createRadialGradient(cx,cy-r*0.7,1,cx,cy-r*0.7,r*spread/80);
+    grd.addColorStop(0,`rgba(147,197,253,${Math.min(0.95,kappa/20+0.15)})`);
+    grd.addColorStop(0.3,`rgba(59,130,246,${Math.min(0.5,kappa/30+0.05)})`);
+    grd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle=grd; ctx.fill();
+    // center dot
+    ctx.beginPath(); ctx.arc(cx,cy-r*0.7,4,0,Math.PI*2);
+    ctx.fillStyle=`rgba(147,197,253,${Math.min(1,kappa/10+0.3)})`; ctx.fill();
+    // border
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.strokeStyle='rgba(255,255,255,0.1)'; ctx.lineWidth=1; ctx.stroke();
+  }
+  const sl=document.getElementById('kappa-slider');
+  sl.addEventListener('input',function(){
+    const k=this.value/5;
+    document.getElementById('kappa-val').textContent='κ = '+k.toFixed(1);
+    document.getElementById('kappa-quality').textContent=k>10?'HIGH':k>4?'MED':'LOW';
+    document.getElementById('kappa-certainty').textContent=k>10?'LOW':k>4?'MED':'HIGH';
+    document.getElementById('kappa-force').textContent=k>10?'STRONG':k>4?'MOD':'WEAK';
+    const d=document.getElementById('kappa-desc');
+    if(k>10) d.textContent='Sharp laser pointer. Model is confident — applies maximum pull on positives and aggressive push on negatives. Aggressive discriminative learning.';
+    else if(k>4) d.textContent='Moderate spotlight. Balanced learning forces. Reasonable certainty about identity geometry.';
+    else d.textContent='Diffuse floodlight. Model is uncertain — applies gentle, forgiving forces. Prevents overfitting to noise in blurry images.';
+    draw(k);
+  });
+  draw(12);
+})();
+
+// ── GAUSSIAN / VMF MINI CANVASES ──
+(function(){
+  function drawGaussian(){
+    const c=document.getElementById('gaussian-canvas'); if(!c) return;
+    const ctx=c.getContext('2d');
+    ctx.clearRect(0,0,100,80);
+    ctx.beginPath();
+    for(let x=0;x<100;x++){
+      const y=80-70*Math.exp(-Math.pow(x-50,2)/200);
+      if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle='#ef4444'; ctx.lineWidth=2; ctx.stroke();
+    ctx.font='9px Inter'; ctx.fillStyle='#94a3b8'; ctx.fillText('Flat plane — cannot wrap sphere',2,78);
+  }
+  function drawVMFmini(){
+    const c=document.getElementById('vmf-mini-canvas'); if(!c) return;
+    const ctx=c.getContext('2d');
+    ctx.clearRect(0,0,100,80);
+    ctx.beginPath(); ctx.arc(50,40,35,0,Math.PI*2);
+    ctx.strokeStyle='#10b981'; ctx.lineWidth=1.5; ctx.stroke();
+    const g=ctx.createRadialGradient(50,20,2,50,20,30);
+    g.addColorStop(0,'rgba(16,185,129,0.8)'); g.addColorStop(1,'rgba(16,185,129,0)');
+    ctx.beginPath(); ctx.arc(50,40,35,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    ctx.font='9px Inter'; ctx.fillStyle='#94a3b8'; ctx.fillText('Lives on sphere surface ✓',2,78);
+  }
+  drawGaussian(); drawVMFmini();
+})();
+
+// ── HQ / LQ SPHERE VISUALS ──
+(function(){
+  function drawSphere(canvasId, kappa, color){
+    const c=document.getElementById(canvasId); if(!c) return;
+    const ctx=c.getContext('2d');
+    ctx.clearRect(0,0,160,160);
+    const bg=ctx.createRadialGradient(65,65,5,80,80,75);
+    bg.addColorStop(0,'rgba(255,255,255,0.15)'); bg.addColorStop(1,'rgba(0,0,0,0.4)');
+    ctx.beginPath(); ctx.arc(80,80,75,0,Math.PI*2);
+    ctx.fillStyle=bg; ctx.fill();
+    const spread=Math.max(8,80/(kappa+1));
+    const g=ctx.createRadialGradient(80,30,2,80,30,spread);
+    g.addColorStop(0,'rgba(255,255,255,0.9)'); g.addColorStop(0.4,color+'aa'); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath(); ctx.arc(80,80,75,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    ctx.beginPath(); ctx.arc(80,80,75,0,Math.PI*2); ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=1; ctx.stroke();
+  }
+  drawSphere('hq-sphere',25,'#93c5fd');
+  drawSphere('lq-sphere',2,'#94a3b8');
+})();
+
+// ── ARCHITECTURE CANVAS ──
+(function(){
+  const c=document.getElementById('arch-canvas'); if(!c) return;
+  const ctx=c.getContext('2d');
+  ctx.clearRect(0,0,740,280);
+  const boxes=[
+    {x:10,y:100,w:80,h:60,label:'Face Image',sub:'Input',color:'#eff6ff',border:'#bfdbfe',icon:'🖼️'},
+    {x:130,y:90,w:100,h:80,label:'Backbone f(·)',sub:'ResNet-50\nMobileFaceNet',color:'#f5f3ff',border:'#c4b5fd',icon:'🧠'},
+    {x:270,y:90,w:100,h:80,label:'Proj. Head g(·)',sub:'FC Layer\n1024→128',color:'#fff7ed',border:'#fed7aa',icon:'🔄'},
+    {x:410,y:40,w:100,h:80,label:'μ = ẑᵢ',sub:'L₂-normalize\nMean Direction',color:'#eff6ff',border:'#93c5fd',icon:'📍'},
+    {x:410,y:150,w:100,h:80,label:'κ = ‖zᵢ‖',sub:'Feature Norm\n(stop grad)',color:'#fff7ed',border:'#fb923c',icon:'📏'},
+    {x:555,y:90,w:110,h:80,label:'vMF Distribution',sub:'Vᵢ(x) = vMF(x;μ,κ)',color:'#f0fdf4',border:'#86efac',icon:'🔵'},
+    {x:670,y:40,w:60,h:50,label:'𝓛_U',sub:'Contrastive',color:'#eff6ff',border:'#2563eb',icon:''},
+    {x:670,y:170,w:60,h:50,label:'𝓛_C',sub:'Softmax',color:'#fefce8',border:'#f59e0b',icon:''},
+  ];
+  const arrows=[
+    {x1:90,y1:130,x2:130,y2:130},
+    {x1:230,y1:130,x2:270,y2:130},
+    {x1:370,y1:110,x2:410,y2:80},
+    {x1:370,y1:150,x2:410,y2:190},
+    {x1:510,y1:80,x2:555,y2:110},
+    {x1:510,y1:190,x2:555,y2:150},
+    {x1:665,y1:130,x2:670,y2:65,color:'#2563eb'},
+    {x1:665,y1:130,x2:670,y2:195,color:'#f59e0b'},
+  ];
+  ctx.font='500 11px Inter';
+  arrows.forEach(a=>{
+    ctx.beginPath(); ctx.moveTo(a.x1,a.y1); ctx.lineTo(a.x2,a.y2);
+    ctx.strokeStyle=a.color||'#94a3b8'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.stroke();
+    ctx.setLineDash([]);
+  });
+  boxes.forEach(b=>{
+    ctx.fillStyle=b.color; ctx.strokeStyle=b.border; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.roundRect(b.x,b.y,b.w,b.h,8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#1e293b'; ctx.font='bold 10px Inter'; ctx.textAlign='center';
+    ctx.fillText(b.label,b.x+b.w/2,b.y+28);
+    ctx.fillStyle='#64748b'; ctx.font='9px Inter';
+    b.sub.split('\n').forEach((line,i)=>ctx.fillText(line,b.x+b.w/2,b.y+42+i*12));
+    if(b.icon){ctx.font='14px serif';ctx.fillText(b.icon,b.x+b.w/2,b.y+15);}
+    ctx.textAlign='left';
+  });
+  ctx.font='bold 11px Inter'; ctx.fillStyle='#1e293b'; ctx.textAlign='center';
+  ctx.fillText('Training Pipeline',370,270);
+})();
+
+// ── BATCH CANVAS ──
+(function(){
+  const c=document.getElementById('batch-canvas'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const COLORS=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#f97316'];
+  ctx.clearRect(0,0,700,220);
+  ctx.font='bold 11px Inter'; ctx.fillStyle='#64748b';
+  ctx.fillText('Mini-Batch: N=32 identities × 4 augmentations = 128 images total',10,18);
+  const cols=32, startX=10, startY=30, w=20, h=16, gap=2;
+  for(let id=0;id<cols;id++){
+    for(let aug=0;aug<4;aug++){
+      const x=startX+id*(w+gap), y=startY+aug*(h+gap);
+      const isAnchor=id===0&&aug===1;
+      const isPos=id===0&&!isAnchor;
+      ctx.fillStyle=isAnchor?'#1e3a8a':isPos?'rgba(16,185,129,0.7)':COLORS[id%8]+'88';
+      ctx.strokeStyle=isAnchor?'#2563eb':isPos?'#10b981':'transparent';
+      ctx.lineWidth=isAnchor?2:isPos?1.5:0;
+      ctx.beginPath(); ctx.roundRect(x,y,w,h,3); ctx.fill();
+      if(ctx.lineWidth>0) ctx.stroke();
+      if(isAnchor){ctx.font='bold 8px Inter';ctx.fillStyle='white';ctx.textAlign='center';ctx.fillText('A',x+w/2,y+h/2+3);ctx.textAlign='left';}
+    }
+  }
+  ctx.font='10px Inter'; ctx.fillStyle='#64748b';
+  ctx.fillText('⬆ Anchor (A) is in ID 1 • Green = 3 positives • All others = 124 negatives', 10, 110);
+  // legend
+  const lg=[{c:'#1e3a8a',t:'Anchor (1)'},{c:'rgba(16,185,129,0.7)',t:'Positive (3)'},{c:'rgba(239,68,68,0.55)',t:'Negative (124)'}];
+  lg.forEach((l,i)=>{
+    const lx=10+i*140;
+    ctx.fillStyle=l.c; ctx.beginPath(); ctx.roundRect(lx,130,12,12,3); ctx.fill();
+    ctx.fillStyle='#334155'; ctx.font='10px Inter'; ctx.fillText(l.t,lx+16,141);
+  });
+})();
+
+// ── DISTRIBUTION SCATTER (Tug-of-War) ──
+let distChart = null;
+function genScatter(spread, count) {
+  const pts=[];
+  for(let i=0;i<count;i++){
+    let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random();
+    const n1=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+    const n2=Math.sqrt(-2*Math.log(u))*Math.sin(2*Math.PI*v);
+    pts.push({x:n1*spread,y:n2*spread});
+  }
+  return pts;
+}
+function setQuality(q){
+  const hqData=genScatter(0.4,250), lqData=genScatter(3.2,250);
+  const isHQ=q==='high';
+  if(distChart) distChart.destroy();
+  const ctx=document.getElementById('distributionChart').getContext('2d');
+  distChart=new Chart(ctx,{type:'scatter',data:{datasets:[{data:isHQ?hqData:lqData,backgroundColor:isHQ?'rgba(37,99,235,0.45)':'rgba(244,63,94,0.35)',pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{min:-10,max:10,display:false},y:{min:-10,max:10,display:false}},plugins:{legend:{display:false},tooltip:{enabled:false}},animation:{duration:500}}});
+  document.getElementById('btn-hq').className='tab-btn'+(isHQ?' active':'');
+  document.getElementById('btn-lq').className='tab-btn'+(isHQ?'':' active');
+  document.getElementById('scatter-desc').textContent=isHQ?'High Quality: Sharp vMF spotlight — applies maximum pull/push forces.':'Low Quality: Diffuse probability cloud — gentle, forgiving forces prevent noise memorization.';
+  document.getElementById('dynamic-explanation').innerHTML=isHQ?'<strong>High Quality Anchor:</strong> The model is confident. If a positive sample drifts slightly away, the loss function applies violent "pull" forces to drag it back. Negative samples are hit with massive "push" forces. The model confidently carves out aggressive, highly discriminative geometric boundaries.':'<strong>Low Quality Anchor:</strong> The model acknowledges its uncertainty. It applies extremely weak, forgiving "pull" forces on positive samples, and gentle "push" forces to negatives, preventing the network from memorizing noise. The model refuses to panic and preserves the integrity of the embedding space.';
+}
+setQuality('high');
+
+// ── SYMBOL TABLE HIGHLIGHT ──
+document.querySelectorAll('.symbol-row').forEach(row=>{
+  row.addEventListener('click',()=>{
+    document.querySelectorAll('.symbol-row').forEach(r=>r.classList.remove('bg-blue-100'));
+    row.classList.add('bg-blue-100');
+  });
+});
+
+// ── MARGIN FUNCTION TABS ──
+function showMargin(id, btn) {
+  document.querySelectorAll('[id^=margin-]').forEach(p=>p.classList.remove('active'));
+  document.getElementById('margin-'+id).classList.add('active');
+  btn.closest('.flex').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── THRESHOLD SLIDER ──
+(function(){
+  const sl=document.getElementById('thresh-slider');
+  sl.addEventListener('input',function(){
+    const v=+this.value;
+    const tpir=Math.min(98,v*0.9+10), fpir=Math.min(95,v*0.85-5);
+    document.getElementById('tpir-val').textContent=Math.round(tpir)+'%';
+    document.getElementById('fpir-val').textContent=Math.max(0,Math.round(fpir))+'%';
+    const d=document.getElementById('thresh-desc');
+    if(v<30){d.style.background='#f0fdf4';d.style.borderColor='#bbf7d0';d.style.color='#166534';d.textContent='✓ Very strict threshold! Minimal false alarms but may miss some real threats.';}
+    else if(v<70){d.style.background='#eff6ff';d.style.borderColor='#bfdbfe';d.style.color='#1d4ed8';d.textContent='Moderate threshold. Balances hits and false alarms.';}
+    else{d.style.background='#fef2f2';d.style.borderColor='#fecaca';d.style.color='#991b1b';d.textContent='⚠️ Loose threshold! Catches almost everyone but generates massive false alarms.';}
+  });
+})();
+
+// ── RESULTS CHARTS ──
+(function(){
+  new Chart(document.getElementById('resultsChart').getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:['ArcFace\n(Baseline)','ArcFace\n+UCFace ⭐','CosFace\n(Baseline)','CosFace\n+UCFace ⭐','MagFace\n+UCFace','AdaFace\n+UCFace'],
+      datasets:[{
+        label:'Rank-1 Identification Rate (%)',
+        data:[41.75,87.00,83.30,85.55,87.50,87.30],
+        backgroundColor:['rgba(100,116,139,0.5)','rgba(37,99,235,0.75)','rgba(100,116,139,0.5)','rgba(37,99,235,0.65)','rgba(37,99,235,0.65)','rgba(37,99,235,0.65)'],
+        borderColor:['#64748b','#1d4ed8','#64748b','#1d4ed8','#1d4ed8','#1d4ed8'],
+        borderWidth:2, borderRadius:6,
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y}%`}}},scales:{y:{beginAtZero:false,min:30,max:100,title:{display:true,text:'Rank-1 Identification Rate (%)'}}}}
+  });
+
+  new Chart(document.getElementById('survChart').getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:['ArcFace','ArcFace+PFE','ArcFace+DUL','ArcFace+UCFace ⭐','CosFace+UCFace','MagFace+UCFace','AdaFace+UCFace'],
+      datasets:[{
+        label:'TPIR @ FPIR=0.01 (%)',
+        data:[1.12,12.61,14.55,15.22,14.42,15.55,14.45],
+        backgroundColor:['rgba(239,68,68,0.55)','rgba(100,116,139,0.5)','rgba(100,116,139,0.5)','rgba(37,99,235,0.75)','rgba(37,99,235,0.65)','rgba(37,99,235,0.65)','rgba(37,99,235,0.65)'],
+        borderRadius:6, borderWidth:1.5,
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:20,title:{display:true,text:'TPIR @ FPIR=0.01 (%)'}}}}
+  });
+
+  // τ analysis chart
+  new Chart(document.getElementById('tau-chart').getContext('2d'),{
+    type:'line',
+    data:{
+      labels:['0.1','0.3','0.5','0.7','0.8★','0.9','1.0','5.0','10.0'],
+      datasets:[{label:'SCFace d₁ Rank-1 (%)',data:[83.50,85.50,86.25,86.00,87.00,86.00,87.00,84.25,83.25],borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.08)',fill:true,tension:0.4,pointRadius:[4,4,4,4,8,4,4,4,4],pointBackgroundColor:['#2563eb','#2563eb','#2563eb','#2563eb','#dc2626','#2563eb','#2563eb','#2563eb','#2563eb']}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y}%`}}},scales:{x:{title:{display:true,text:'Temperature τ'}},y:{min:80,max:90,title:{display:true,text:'Rank-1 Rate (%)'}}}}
+  });
+})();
+
+// ── ACCORDION ──
+function toggleAccordion(btn) {
+  const body=btn.nextElementSibling;
+  body.classList.toggle('open'); btn.classList.toggle('open');
+}
+</script>
+</body>
+</html>
